@@ -185,39 +185,9 @@ SEARCH_QUERIES = [
 DIRECT_RSS_FEEDS = [
 
     (
-        "SOA / AAA Research",
-        "SOA Research",
-        "https://www.soa.org/feed/research/"
-    ),
-
-    (
-        "SOA / AAA Research",
-        "SOA News",
-        "https://www.soa.org/feed/news/"
-    ),
-
-    (
-        "SOA / AAA Research",
-        "AAA Publications",
-        "https://www.actuary.org/feed"
-    ),
-
-    (
-        "SOA / AAA Research",
-        "LIMRA",
-        "https://www.limra.com/en/newsroom/news-releases/feed/"
-    ),
-
-    (
         "Annuity Market",
         "Life Annuity Specialist",
         "https://lifeannuityspecialist.com/feed/"
-    ),
-
-    (
-        "Industry Coverage",
-        "ThinkAdvisor Life & Health",
-        "https://www.thinkadvisor.com/life-health/feed/"
     ),
 
     (
@@ -226,21 +196,4 @@ DIRECT_RSS_FEEDS = [
         "https://www.prnewswire.com/rss/news-releases-list.rss?company=am-best"
     ),
 
-    (
-        "Rating Agency Actions",
-        "S&P Insurance",
-        "https://www.spglobal.com/ratings/en/research/rss?sectorCode=INS"
-    ),
-
-    (
-        "Rating Agency Actions",
-        "Moody's",
-        "https://www.moodys.com/newsandevents/rss/newsandevents_rss.aspx"
-    ),
-
-    (
-        "Rating Agency Actions",
-        "Fitch Insurance",
-        "https://www.fitchratings.com/search/rss?sectors=insurance"
-    )
 ]
