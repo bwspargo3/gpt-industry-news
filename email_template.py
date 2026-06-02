@@ -57,11 +57,11 @@ def build_market_dashboard(market):
             spread_color = "#FFB300"
 
     # ALM indicators
-def aval_bps(key):
-    item = additional.get(key)
-    if not item:
-        return "N/A"
-    return f"{item['value'] * 100:.0f} bps"
+    def aval_bps(key):
+        item = additional.get(key)
+        if not item:
+            return "N/A"
+        return f"{item['value'] * 100:.0f} bps"
 
     ig_val = aval_bps("IG_OAS")
     hy_val = aval_bps("HY_OAS")
@@ -82,7 +82,7 @@ def aval_bps(key):
     alm_bar = f"""
     <table width="100%" cellpadding="0" cellspacing="0"
            style="margin-top:8px;border-collapse:collapse;
-                  border-top:1px solid #1E3A5F;">
+border-top:1px solid #1E3A5F;">
       <tr>
         {alm_indicator("IG OAS",         ig_val)}
         {alm_indicator("HY OAS",         hy_val)}
@@ -108,6 +108,7 @@ def aval_bps(key):
     </table>
     {alm_bar}
     """
+
 
 def metric_tile(label, value, value_color="#FFFFFF"):
     return f"""
