@@ -51,6 +51,15 @@ SEARCH_QUERIES = [
     # Rating Agencies
     ("Rating Agency Actions", "AM Best life insurer rating action"),
     ("Rating Agency Actions", "Moodys Fitch life insurance outlook downgrade"),
+
+    # Consulting Firm Research
+    ("Consulting & Research", "Milliman life insurance actuarial report"),
+    ("Consulting & Research", "Oliver Wyman life insurance annuity report"),
+    ("Consulting & Research", "Deloitte life insurance LDTI regulatory"),
+    ("Consulting & Research", "EY life insurance actuarial report"),
+    ("Consulting & Research", "PwC life insurance capital reserving"),
+    ("Consulting & Research", "KPMG life insurance regulatory update"),
+    ("Consulting & Research", "WTW Willis Towers Watson life insurance report"),
 ]
 
 # -----------------------------------------------------------------------------
@@ -174,10 +183,49 @@ DIRECT_RSS_FEEDS = [
         "?agencies[]=internal-revenue-service"
         "&topics[]=life-insurance"
     ),
+    # In DIRECT_RSS_FEEDS, REPLACE the two Federal Register entries with:
+
+    # Federal Register — tighter topic filter applied in scoring
     (
         "Regulatory",
-        "Federal Register (DOL)",
+        "Federal Register (IRS Life)",
         "https://www.federalregister.gov/api/v1/articles.rss"
-        "?agencies[]=employee-benefits-security-administration"
+        "?agencies[]=internal-revenue-service"
+        "&topics[]=life-insurance"
+    ),
+    # Note: removed the broad DOL EBSA feed — too noisy
+
+    # Consulting Firm Research
+    (
+        "Consulting & Research",
+        "Milliman Insights",
+        "https://www.milliman.com/en/insight/rss"
+    ),
+    (
+        "Consulting & Research",
+        "Oliver Wyman Insurance",
+        "https://www.oliverwyman.com/our-expertise/industries/"
+        "financial-services/insurance.rss"
+    ),
+    (
+        "Consulting & Research",
+        "Deloitte Insurance",
+        "https://www2.deloitte.com/us/en/pages/financial-services/"
+        "topics/insurance.rss"
+    ),
+    (
+        "Consulting & Research",
+        "EY Insurance",
+        "https://www.ey.com/en_us/industries/insurance.rss"
+    ),
+    (
+        "Consulting & Research",
+        "WTW Insurance Research",
+        "https://www.wtwco.com/en-us/insights/rss?practice=insurance"
+    ),
+    (
+        "Consulting & Research",
+        "KPMG Insurance",
+        "https://kpmg.com/us/en/articles/insurance.rss"
     ),
 ]
