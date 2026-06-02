@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Google News Search Queries — trimmed to high-signal only
+# Google News Search Queries — high-signal industry queries
 # (category, query)
 # -----------------------------------------------------------------------------
 
@@ -50,46 +50,44 @@ SEARCH_QUERIES = [
 
     # Rating Agencies
     ("Rating Agency Actions", "AM Best life insurer rating action"),
-    ("Rating Agency Actions", "Moodys Fitch life insurance outlook"),
+    ("Rating Agency Actions", "Moodys Fitch life insurance outlook downgrade"),
 ]
 
 # -----------------------------------------------------------------------------
-# Carrier Watchlist Queries
-# Kansas City insurers + major national carriers
+# Carrier Watchlist — specific enough to avoid false positives
+# (category, query)
 # -----------------------------------------------------------------------------
-
-CARRIER_WATCHLIST = [
-
-    # Kansas City / Midwest
-    "Kansas City Life Insurance",
-    "Protective Life",          # Birmingham but major regional presence
-    "Ameritas Life",
-    "Securian Financial",
-    "Country Financial",
-    "Business Men's Assurance BMI",
-    "Midland National Life",
-    "North American Company Life",
-
-    # Large Nationals
-    "Pacific Life Insurance",
-    "Equitable Life insurance",
-    "AIG life insurance annuity",
-    "Brighthouse Financial",
-    "CNO Financial Bankers Life",
-    "Global Atlantic reinsurance",
-    "Lincoln Financial Group",
-    "Transamerica life insurance",
-    "Sammons Financial",
-    "Mutual of Omaha life",
-]
 
 CARRIER_SEARCH_QUERIES = [
-    ("Carrier Intelligence", carrier)
-    for carrier in CARRIER_WATCHLIST
+
+    # Kansas City / Midwest
+    ("Carrier Intelligence", "Kansas City Life Insurance company"),
+    ("Carrier Intelligence", "Ameritas Life Partners insurance annuity"),
+    ("Carrier Intelligence", "Securian Financial life insurance annuity"),
+    ("Carrier Intelligence", "Country Financial life insurance annuity"),
+    ("Carrier Intelligence", "Business Men's Assurance life insurance"),
+    ("Carrier Intelligence", "Midland National Life Insurance annuity"),
+    ("Carrier Intelligence", "North American Company Life Annuity Sammons"),
+
+    # Large Nationals
+    ("Carrier Intelligence", "Pacific Life Insurance annuity"),
+    ("Carrier Intelligence", "Equitable Holdings life insurance annuity"),
+    ("Carrier Intelligence", "AIG life insurance annuity division"),
+    ("Carrier Intelligence", "Brighthouse Financial annuity life"),
+    ("Carrier Intelligence", "CNO Financial Bankers Life insurance"),
+    ("Carrier Intelligence", "Global Atlantic life reinsurance"),
+    ("Carrier Intelligence", "Protective Life Insurance annuity"),
+    ("Carrier Intelligence", "Lincoln Financial life annuity"),
+    ("Carrier Intelligence", "Transamerica life insurance annuity"),
+    ("Carrier Intelligence", "Mutual of Omaha life insurance"),
+
+    # Firm self-monitoring
+    ("Carrier Intelligence", "Actuarial Resources Corporation ARC actuarial"),
+    ("Carrier Intelligence", "Springline advisory actuarial consulting"),
 ]
 
 # -----------------------------------------------------------------------------
-# Direct RSS Feeds — primary sources, no Google News intermediary
+# Direct RSS Feeds — primary sources only, no Google News intermediary
 # (category, source_name, url)
 # -----------------------------------------------------------------------------
 
@@ -149,17 +147,37 @@ DIRECT_RSS_FEEDS = [
         "https://insurancenewsnet.com/rss"
     ),
 
-    # AM Best
+    # AM Best — actual ratings feed, not PR wire
     (
         "Rating Agency Actions",
-        "AM Best",
-        "https://www.prnewswire.com/rss/news-releases-list.rss?company=am-best"
+        "AM Best Ratings",
+        "https://www.ambest.com/rss/ratings.rss"
+    ),
+    (
+        "Rating Agency Actions",
+        "AM Best News",
+        "https://www.ambest.com/rss/latestnews.rss"
     ),
 
-    # Insurance Journal (life/annuity filter applied in scoring)
+    # Insurance Journal — life/annuity content filtered by scoring
     (
         "Life Product Developments",
         "Insurance Journal",
         "https://www.insurancejournal.com/feed/"
+    ),
+
+    # Federal Register — IRS and DOL guidance affecting life/annuity
+    (
+        "Regulatory",
+        "Federal Register (IRS)",
+        "https://www.federalregister.gov/api/v1/articles.rss"
+        "?agencies[]=internal-revenue-service"
+        "&topics[]=life-insurance"
+    ),
+    (
+        "Regulatory",
+        "Federal Register (DOL)",
+        "https://www.federalregister.gov/api/v1/articles.rss"
+        "?agencies[]=employee-benefits-security-administration"
     ),
 ]
