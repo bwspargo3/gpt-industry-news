@@ -122,22 +122,31 @@ def metric_tile(label, value, value_color="#FFFFFF"):
 def build_impact_section(category_buckets, level):
 
     impact_color = {
-
-        "HIGH": "#C62828",
+        "HIGH":   "#C62828",
         "MEDIUM": "#EF6C00",
-        "LOW": "#2E7D32"
-
+        "LOW":    "#2E7D32",
     }[level]
+
+    tag_colors = {
+        "VALUATION":  "#1565C0",
+        "PRICING":    "#6A1B9A",
+        "ALM":        "#00695C",
+        "REINSURANCE":"#4E342E",
+        "CAPITAL":    "#B71C1C",
+        "EXPERIENCE": "#E65100",
+        "REGULATORY": "#283593",
+        "ACCOUNTING": "#37474F",
+        "CARRIER":    "#1B5E20",
+        "GENERAL":    "#757575",
+    }
 
     rows = ""
 
     for category, articles in category_buckets.items():
 
         matching = [
-
             a for a in articles
             if a.get("impact") == level
-
         ]
 
         if not matching:
@@ -159,12 +168,32 @@ def build_impact_section(category_buckets, level):
 
         for article in matching[:5]:
 
+            tags = article.get("tags", ["GENERAL"])
+
+            tag_html = ""
+            for tag in tags:
+                color = tag_colors.get(tag, "#757575")
+                tag_html += f"""<span style="
+                    background:{color};
+                    color:white;
+                    font-size:9px;
+                    font-weight:bold;
+                    padding:2px 6px;
+                    border-radius:3px;
+                    margin-right:4px;
+                    letter-spacing:0.5px;
+                    font-family:Arial;
+                ">{tag}</span>"""
+
             rows += f"""
             <tr>
                 <td style="
                     padding:12px 0;
                     border-bottom:1px solid #F2F2F2;
                 ">
+                    <div style="margin-bottom:5px;">
+                        {tag_html}
+                    </div>
 
                     <div style="
                         font-weight:600;
@@ -172,10 +201,7 @@ def build_impact_section(category_buckets, level):
                         font-size:14px;
                     ">
                         <a href="{article['url']}"
-                           style="
-                               color:#1F3A60;
-                               text-decoration:none;
-                           ">
+                           style="color:#1F3A60;text-decoration:none;">
                             {html_escape(article['title'])}
                         </a>
                     </div>
@@ -183,9 +209,9 @@ def build_impact_section(category_buckets, level):
                     <div style="
                         color:#888;
                         font-size:11px;
-                        margin-top:5px;
+                        margin-top:4px;
                     ">
-                        {article['source']}
+                        {article['source']} &nbsp;·&nbsp; {article.get('date', '')}
                     </div>
 
                 </td>
@@ -216,6 +242,7 @@ def build_impact_section(category_buckets, level):
 
     </table>
     """
+
 
 # ---------------------------------------------------------------------
 # Action Items
@@ -394,6 +421,9 @@ def build_email_html(
     action_panel = build_action_panel(
         summary
     )
+    
+    conversation_panel = build_conversation_starters(summary)
+
 
     consulting_panel = build_consulting_panel(
         consulting_opportunities
@@ -489,6 +519,8 @@ Executive Summary
 
 {action_panel}
 
+{conversation_panel}
+
 {consulting_panel}
 
 {high_section}
@@ -530,3 +562,119 @@ AM Best • S&P • Moody's • Fitch • SEC EDGAR
 </body>
 </html>
 """
+
+def build_conversation_starters(summary):
+    """
+    Extracts the Conversation Starters section from the Groq summary
+    and renders it as a formatted panel.
+    """
+
+    lines = summary.splitlines()
+    collecting = False
+    starter_blocks = []
+    current_block = []
+
+    for line in lines:
+
+        if "Conversation Starters" in line:
+            collecting = True
+            continue
+
+        if collecting:
+            # Stop at next bold header
+            if line.startswith("**") and line.endswith("**") and current_block:
+                break
+            if line.strip().startswith("- TOPIC:"):
+                if current_block:
+                    starter_blocks.append("\n".join(current_block))
+                current_block = [line.strip()]
+            elif current_block:
+                current_block.append(line.strip())
+
+    if current_block:
+        starter_blocks.append("\n".join(current_block))
+
+    if not starter_blocks:
+        return ""
+
+    cards_html = ""
+
+    for block in starter_blocks[:5]:
+
+        topic       = ""
+        what_to_say = ""
+        why_now     = ""
+        relevant_to = ""
+
+        for line in block.splitlines():
+            if line.startswith("- TOPIC:"):
+                topic = line.replace("- TOPIC:", "").strip()
+            elif line.startswith("WHAT TO SAY:"):
+                what_to_say = line.replace("WHAT TO SAY:", "").strip()
+            elif line.startswith("WHY NOW:"):
+                why_now = line.replace("WHY NOW:", "").strip()
+            elif line.startswith("RELEVANT TO:"):
+                relevant_to = line.replace("RELEVANT TO:", "").strip()
+
+        if not topic:
+            continue
+
+        cards_html += f"""
+        <div style="
+            border:1px solid #D0E4F7;
+            border-radius:6px;
+            padding:16px;
+            margin-bottom:14px;
+            background:#F7FBFF;
+        ">
+            <div style="
+                font-weight:bold;
+                font-size:14px;
+                color:#0D3B6E;
+                margin-bottom:8px;
+            ">
+                💬 {html_escape(topic)}
+            </div>
+
+            <div style="
+                font-size:13px;
+                color:#333;
+                line-height:1.6;
+                margin-bottom:8px;
+            ">
+                {html_escape(what_to_say)}
+            </div>
+
+            <div style="font-size:11px;color:#666;margin-top:6px;">
+                <strong>Why now:</strong> {html_escape(why_now)}
+            </div>
+
+            <div style="font-size:11px;color:#666;margin-top:3px;">
+                <strong>Relevant to:</strong> {html_escape(relevant_to)}
+            </div>
+        </div>
+        """
+
+    if not cards_html:
+        return ""
+
+    return f"""
+    <div style="
+        margin-top:25px;
+        border-left:5px solid #1565C0;
+        background:#EEF5FF;
+        padding:20px;
+    ">
+        <div style="
+            font-weight:bold;
+            font-size:16px;
+            color:#13294B;
+            margin-bottom:14px;
+        ">
+            Conversation Starters for Client Calls This Week
+        </div>
+
+        {cards_html}
+
+    </div>
+    """
