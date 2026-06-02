@@ -156,6 +156,8 @@ TAG_COLORS = {
     "ACCOUNTING": "#37474F",
     "CARRIER":    "#1B5E20",
     "GENERAL":    "#757575",
+    "RESEARCH": "#4527A0",  # deep purple
+
 }
 
 def build_tag_badges(tags):
