@@ -140,6 +140,16 @@ ACTUARIAL_KEYWORDS = {
     "solvency": 7,
     "fiduciary": 6,
     "actuarial": 4, "actuary": 4,
+    
+    # Consulting firms — boost relevance when they publish life/annuity content
+    "milliman": 8,
+    "oliver wyman": 8,
+    "deloitte insurance": 6,
+    "ey insurance": 6,
+    "pwc insurance": 6,
+    "kpmg insurance": 6,
+    "wtw": 6,
+    "willis towers watson": 6,
 
     # Watchlist carriers — boost relevance
     "kansas city life": 10,
@@ -203,6 +213,24 @@ NOISE_PHRASES = [
     "homeowners",
     "flood insurance",
     "earthquake",
+        # Federal Register false positives
+    "anadromous fish",
+    "endangered species",
+    "migratory bird",
+    "wetlands",
+    "pesticide",
+    "food safety",
+    "aviation",
+    "railroad",
+    "coast guard",
+    "nuclear",
+    "veterans",
+    "tribal",
+    "agriculture",
+    "forestry",
+    "mining",
+    "osha",
+    "occupational safety",
 ]
 
 # -----------------------------------------------------------------------------
@@ -220,6 +248,14 @@ LOW_IMPACT_ALLOWED_TAGS = [
 
 # Minimum score for a LOW impact article to appear in the email
 LOW_IMPACT_MIN_SCORE = 5
+# Minimum scores by source — sources prone to noise need a higher bar
+SOURCE_MIN_SCORES = {
+    "Federal Register (IRS Life)":  8,
+    "Federal Register (DOL)":       8,
+    "Insurance Journal":            5,
+    "Google News":                  6,
+}
+
 
 # -----------------------------------------------------------------------------
 # Persistent Watch List
