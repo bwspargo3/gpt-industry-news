@@ -217,7 +217,7 @@ def build_impact_section(
         rows += f"""
         <tr>
             <td style="padding:12px 0;font-size:18px;font-weight:bold;
-                       color:#13294B;border-bottom:1px solid #EEEEEE;">
+color:#13294B;border-bottom:1px solid #EEEEEE;">
                 {html_escape(category)}
             </td>
         </tr>
@@ -229,6 +229,7 @@ def build_impact_section(
             tag_html = build_tag_badges(tags)
             date_str = html_escape(article.get("date", ""))
             source   = html_escape(article.get("source", ""))
+            snippet  = html_escape(article.get("snippet", ""))
 
             rows += f"""
             <tr>
@@ -242,14 +243,36 @@ def build_impact_section(
                             {html_escape(article['title'])}
                         </a>
                     </div>
+                    
+                    <div style="color:#555;font-size:12px;margin-top:6px;line-height:1.4;">
+                        {snippet}
+                    </div>
 
-                    <div style="color:#888;font-size:11px;margin-top:4px;">
+                    <div style="color:#888;font-size:11px;margin-top:6px;">
                         {source} &nbsp;·&nbsp; {date_str}
                     </div>
 
                 </td>
             </tr>
             """
+
+    if not rows:
+        return ""
+
+    return f"""
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="margin-top:25px;">
+        <tr>
+            <td style="background:{impact_color};color:white;
+                       padding:12px 18px;font-weight:bold;
+                       font-size:16px;border-radius:6px;">
+                {level} IMPACT DEVELOPMENTS
+            </td>
+        </tr>
+        {rows}
+    </table>
+    """
+
 
     if not rows:
         return ""
