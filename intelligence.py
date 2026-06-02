@@ -208,7 +208,7 @@ def fetch_edgar_filings():
 
         headers = {
             "User-Agent":
-            "Actuarial Intelligence"
+            f"Actuarial Intelligence{GMAIL_USER}"
         }
 
         response = requests.get(
