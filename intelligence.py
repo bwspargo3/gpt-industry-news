@@ -578,7 +578,7 @@ SUMMARY: {article['snippet']}
 You are a senior life and annuity actuarial consultant.
 
 Write a professional executive briefing.
-
+Focus exclusively on information relevant to life insurance and annuity valuation, pricing, modeling, experience studies, capital management, reinsurance, product development, and actuarial consulting opportunities. Ignore property/casualty, employee benefits, health insurance, and general insurance news unless it has a direct impact on life and annuity insurers.
 Focus ONLY on topics relevant to:
 
 - Reserving
@@ -637,9 +637,9 @@ Consulting Opportunities
 
 Key Takeaway
 
-Be concise.
+Be concise, bit provide original insight.
 
-Explain WHY each item matters to life actuaries.
+Explain WHY each item matters to life actuaries. If explanation is thin, use none at all.
 """
 
     response = client.chat.completions.create(
