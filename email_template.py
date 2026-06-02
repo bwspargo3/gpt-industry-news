@@ -57,8 +57,14 @@ def build_market_dashboard(market):
             spread_color = "#FFB300"
 
     # ALM indicators
-    ig_val  = aval("IG_OAS",        "{:.0f}",  " bps")
-    hy_val  = aval("HY_OAS",        "{:.0f}",  " bps")
+def aval_bps(key):
+    item = additional.get(key)
+    if not item:
+        return "N/A"
+    return f"{item['value'] * 100:.0f} bps"
+
+ig_val = aval_bps("IG_OAS")
+hy_val = aval_bps("HY_OAS")
     be_val  = aval("BREAKEVEN_10Y", "{:.2f}",  "%")
     vix_val = aval("VIX",           "{:.1f}",  "")
 
