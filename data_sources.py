@@ -175,9 +175,112 @@ SEARCH_QUERIES = [
     (
         "Investments & ALM",
         "interest rate impact life insurance reserves"
-    )
-]
+    ),
 
+# Additional Reserving
+
+(
+    "Valuation & Reserving",
+    "AG 38 life insurance reserves"
+),
+
+(
+    "Valuation & Reserving",
+    "principle based reserving VM-20"
+),
+
+(
+    "Valuation & Reserving",
+    "VM-22 annuity reserve implementation"
+),
+
+# Capital
+
+(
+    "Capital & Risk",
+    "C3 Phase II"
+),
+
+(
+    "Capital & Risk",
+    "risk based capital life insurance"
+),
+
+# Reinsurance
+
+(
+    "Reinsurance",
+    "modco reinsurance"
+),
+
+(
+    "Reinsurance",
+    "YRT reinsurance life insurance"
+),
+
+(
+    "Reinsurance",
+    "asset intensive reinsurance"
+),
+
+# Investments
+
+(
+    "Investments & ALM",
+    "private credit insurance companies"
+),
+
+(
+    "Investments & ALM",
+    "structured credit life insurers"
+),
+
+(
+    "Investments & ALM",
+    "insurance asset liability management"
+),
+
+# Rating Agencies
+
+(
+    "Rating Agency Actions",
+    "AM Best life insurer downgrade"
+),
+
+(
+    "Rating Agency Actions",
+    "Moody's life insurance outlook"
+),
+
+(
+    "Rating Agency Actions",
+    "Fitch life insurance rating action"
+),
+
+# SOA / AAA
+
+(
+    "SOA / AAA Research",
+    "Society of Actuaries research"
+),
+
+(
+    "SOA / AAA Research",
+    "American Academy of Actuaries"
+),
+
+# LDTI
+
+(
+    "Accounting & LDTI",
+    "LDTI implementation life insurance"
+),
+
+(
+    "Accounting & LDTI",
+    "insurance accounting long duration contracts"
+)
+]
 # -----------------------------------------------------------------------------
 # RSS Feeds
 # -----------------------------------------------------------------------------
