@@ -114,6 +114,16 @@ FUNCTION_TAGS = {
     "fiduciary":                 ["REGULATORY"],
     "irs":                       ["REGULATORY"],
     "internal revenue":          ["REGULATORY"],
+        "milliman":          ["VALUATION", "EXPERIENCE"],
+    "oliver wyman":      ["CAPITAL", "ALM"],
+    "deloitte":          ["ACCOUNTING", "REGULATORY"],
+    "ernst & young":     ["ACCOUNTING", "REGULATORY"],
+    "pwc":               ["ACCOUNTING", "REGULATORY"],
+    "kpmg":              ["REGULATORY"],
+    "willis towers":     ["ALM", "EXPERIENCE"],
+    "wtw":               ["ALM", "EXPERIENCE"],
+    "consulting":        ["GENERAL"],
+
 }
 
 # -----------------------------------------------------------------------------
