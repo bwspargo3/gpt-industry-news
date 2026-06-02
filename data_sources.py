@@ -1,72 +1,249 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+# -----------------------------------------------------------------------------
+# Google News Search Queries
+# -----------------------------------------------------------------------------
 
-\f0\fs24 \cf0 # -----------------------------------------------------------------------------\
-# Google News Search Queries\
-# -----------------------------------------------------------------------------\
-\
-SEARCH_QUERIES = [\
-\
-    # Reserving / Valuation\
-\
-    (\
-        "Valuation & Reserving",\
-        "VM-20 life insurance reserve update"\
-    ),\
-\
-    (\
-        "Valuation & Reserving",\
-        "VM-22 annuity reserve update"\
-    ),\
-\
-    (\
-        "Valuation & Reserving",\
-        "principle based reserving update"\
-    ),\
-\
-    (\
-        "Valuation & Reserving",\
-        "asset adequacy testing life insurance"\
-    ),\
-\
-    (\
-        "Valuation & Reserving",\
-        "cash flow testing life insurance"\
-    ),\
-\
-    # Regulatory\
-\
-    (\
-        "Regulatory",\
-        "NAIC Life Actuarial Task Force LATF"\
-    ),\
-\
-    (\
-        "Regulatory",\
-        "NAIC Life Insurance and Annuities Committee"\
-    ),\
-\
-    (\
-        "Regulatory",\
-        "NAIC actuarial guideline life insurance"\
-    ),\
-\
-    # Accounting\
-\
-    (\
-        "Accounting & LDTI",\
-        "LDTI insurance update"\
-    ),\
-\
-    (\
-        "Accounting & LDTI",\
-        "ASC 944 insurance accounting"\
-    ),\
-\
+SEARCH_QUERIES = [
+
+    # Reserving / Valuation
+
+    (
+        "Valuation & Reserving",
+        "VM-20 life insurance reserve update"
+    ),
+
+    (
+        "Valuation & Reserving",
+        "VM-22 annuity reserve update"
+    ),
+
+    (
+        "Valuation & Reserving",
+        "principle based reserving update"
+    ),
+
+    (
+        "Valuation & Reserving",
+        "asset adequacy testing life insurance"
+    ),
+
+    (
+        "Valuation & Reserving",
+        "cash flow testing life insurance"
+    ),
+
+    # Regulatory
+
+    (
+        "Regulatory",
+        "NAIC Life Actuarial Task Force LATF"
+    ),
+
+    (
+        "Regulatory",
+        "NAIC Life Insurance and Annuities Committee"
+    ),
+
+    (
+        "Regulatory",
+        "NAIC actuarial guideline life insurance"
+    ),
+
+    # Accounting
+
+    (
+        "Accounting & LDTI",
+        "LDTI insurance update"
+    ),
+
+    (
+        "Accounting & LDTI",
+        "ASC 944 insurance accounting"
+    ),
+
+    (
+        "Accounting & LDTI",
+        "FASB insurance accounting update"
+    ),
+
+    # Experience Studies
+
+    (
+        "Mortality & Experience",
+        "SOA mortality study"
+    ),
+
+    (
+        "Mortality & Experience",
+        "insured mortality experience"
+    ),
+
+    (
+        "Mortality & Experience",
+        "life insurance lapse study"
+    ),
+
+    (
+        "Mortality & Experience",
+        "policyholder behavior study"
+    ),
+
+    # Reinsurance
+
+    (
+        "Reinsurance",
+        "life reinsurance transaction"
+    ),
+
+    (
+        "Reinsurance",
+        "funds withheld reinsurance"
+    ),
+
+    (
+        "Reinsurance",
+        "coinsurance life insurance"
+    ),
+
+    (
+        "Reinsurance",
+        "bermuda life reinsurance"
+    ),
+
+    # Capital
+
+    (
+        "Capital & Risk",
+        "life insurance RBC update"
+    ),
+
+    (
+        "Capital & Risk",
+        "economic capital life insurer"
+    ),
+
+    (
+        "Capital & Risk",
+        "capital adequacy life insurer"
+    ),
+
+    # Annuities
+
+    (
+        "Annuity Market",
+        "fixed indexed annuity sales"
+    ),
+
+    (
+        "Annuity Market",
+        "RILA sales"
+    ),
+
+    (
+        "Annuity Market",
+        "annuity hedging"
+    ),
+
+    # Product Development
+
+    (
+        "Life Product Developments",
+        "indexed universal life"
+    ),
+
+    (
+        "Life Product Developments",
+        "life insurance product launch"
+    ),
+
+    (
+        "Life Product Developments",
+        "term insurance pricing"
+    ),
+
+    # Investments
+
+    (
+        "Investments & ALM",
+        "asset liability management annuity"
+    ),
+
+    (
+        "Investments & ALM",
+        "private credit life insurance"
+    ),
+
+    (
+        "Investments & ALM",
+        "interest rate impact life insurance reserves"
+    )
+]
+
+# -----------------------------------------------------------------------------
+# RSS Feeds
+# -----------------------------------------------------------------------------
+
+DIRECT_RSS_FEEDS = [
+
+    (
+        "SOA / AAA Research",
+        "SOA Research",
+        "https://www.soa.org/feed/research/"
+    ),
+
+    (
+        "SOA / AAA Research",
+        "SOA News",
+        "https://www.soa.org/feed/news/"
+    ),
+
+    (
+        "SOA / AAA Research",
+        "AAA Publications",
+        "https://www.actuary.org/feed"
+    ),
+
+    (
+        "SOA / AAA Research",
+        "LIMRA",
+        "https://www.limra.com/en/newsroom/news-releases/feed/"
+    ),
+
+    (
+        "Annuity Market",
+        "Life Annuity Specialist",
+        "https://lifeannuityspecialist.com/feed/"
+    ),
+
+    (
+        "Industry Coverage",
+        "ThinkAdvisor Life & Health",
+        "https://www.thinkadvisor.com/life-health/feed/"
+    ),
+
+    (
+        "Rating Agency Actions",
+        "AM Best",
+        "https://www.prnewswire.com/rss/news-releases-list.rss?company=am-best"
+    ),
+
+    (
+        "Rating Agency Actions",
+        "S&P Insurance",
+        "https://www.spglobal.com/ratings/en/research/rss?sectorCode=INS"
+    ),
+
+    (
+        "Rating Agency Actions",
+        "Moody's",
+        "https://www.moodys.com/newsandevents/rss/newsandevents_rss.aspx"
+    ),
+
+    (
+        "Rating Agency Actions",
+        "Fitch Insurance",
+        "https://www.fitchratings.com/search/rss?sectors=insurance"
+    )
+]\
     (\
         "Accounting & LDTI",\
         "FASB insurance accounting update"\
