@@ -30,7 +30,7 @@ def build_market_dashboard(market):
         item = t.get(series)
         return f"{item['value']:.2f}%" if item else "N/A"
 
-    def aval(key, fmt="{:.2f}%", suffix=""):
+    def aval(key, fmt="{:.2f}", suffix=""):
         item = additional.get(key)
         if not item:
             return "N/A"
@@ -56,14 +56,14 @@ def build_market_dashboard(market):
         elif spread < 0.15:
             spread_color = "#FFB300"
 
-    ig_val  = aval("IG_OAS",        "{:.0f} bps")
-    hy_val  = aval("HY_OAS",        "{:.0f} bps")
-    be_val  = aval("BREAKEVEN_10Y", "{:.2f}%")
-    vix_val = aval("VIX",           "{:.1f}")
+    # ALM indicators
+    ig_val  = aval("IG_OAS",        "{:.0f}",  " bps")
+    hy_val  = aval("HY_OAS",        "{:.0f}",  " bps")
+    be_val  = aval("BREAKEVEN_10Y", "{:.2f}",  "%")
+    vix_val = aval("VIX",           "{:.1f}",  "")
 
-    # Determine VIX color
-    vix_item = additional.get("VIX")
-    vix_color = "#FFFFFF"
+    vix_item  = additional.get("VIX")
+    vix_color = "#9CB7D7"
     if vix_item:
         v = vix_item["value"]
         if v > 25:
@@ -73,41 +73,34 @@ def build_market_dashboard(market):
         else:
             vix_color = "#4CAF50"
 
+    alm_bar = f"""
+    <table width="100%" cellpadding="0" cellspacing="0"
+           style="margin-top:8px;border-collapse:collapse;
+                  border-top:1px solid #1E3A5F;">
+      <tr>
+        {alm_indicator("IG OAS",         ig_val)}
+        {alm_indicator("HY OAS",         hy_val)}
+        {alm_indicator("10Y Breakeven",  be_val)}
+        {alm_indicator("VIX",            vix_val, vix_color)}
+      </tr>
+    </table>
+    """
+
     return f"""
     <table width="100%" cellpadding="0" cellspacing="0"
            style="margin-top:15px;border-collapse:collapse;">
-
       <tr>
         {metric_tile("2Y Treasury",   tval("2Y"))}
         {metric_tile("5Y Treasury",   tval("5Y"))}
         {metric_tile("10Y Treasury",  tval("10Y"))}
       </tr>
-
       <tr>
         {metric_tile("30Y Treasury",  tval("30Y"))}
         {metric_tile("SOFR",          sofr_val)}
         {metric_tile("2Y/10Y Spread", spread_val, spread_color)}
       </tr>
-
-      <tr>
-        {metric_tile("IG Spread (OAS)", ig_val)}
-        {metric_tile("HY Spread (OAS)", hy_val)}
-        {metric_tile("10Y Breakeven",   be_val)}
-      </tr>
-
-      <tr>
-        {metric_tile("VIX", vix_val, vix_color)}
-        <td width="33%"
-            style="background:#13294B;border:1px solid #23406C;
-                   padding:16px;text-align:center;">
-        </td>
-        <td width="33%"
-            style="background:#13294B;border:1px solid #23406C;
-                   padding:16px;text-align:center;">
-        </td>
-      </tr>
-
     </table>
+    {alm_bar}
     """
 
 def metric_tile(label, value, value_color="#FFFFFF"):
@@ -126,6 +119,27 @@ def metric_tile(label, value, value_color="#FFFFFF"):
         </div>
     </td>
     """
+
+def alm_indicator(label, value, value_color="#9CB7D7"):
+    """
+    Compact single-line indicator for the ALM bar below the main tiles.
+    """
+    return f"""
+    <td style="background:#0D2340;padding:10px 16px;text-align:center;
+               border-right:1px solid #1E3A5F;">
+        <span style="color:#8FAFD6;font-size:10px;
+                     text-transform:uppercase;letter-spacing:1px;
+                     font-family:Arial;">
+            {label}&nbsp;
+        </span>
+        <span style="color:{value_color};font-size:14px;
+                     font-weight:bold;font-family:Arial;">
+            {value}
+        </span>
+    </td>
+    """
+
+
 
 # ---------------------------------------------------------------------
 # Impact Articles — with tag badges and noise filtering
