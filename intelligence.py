@@ -338,20 +338,64 @@ def deduplicate_articles(category_buckets):
 
 def filter_noise(category_buckets):
     """
-    Removes articles matching NOISE_PHRASES before scoring.
-    Runs after deduplication.
+    Two-pass filter:
+    1. Drop articles matching NOISE_PHRASES (content-based)
+    2. Drop articles below SOURCE_MIN_SCORES for noisy sources
+       (applied after scoring, so call score_articles first,
+        or apply a pre-score heuristic based on source name)
     """
+    from config import NOISE_PHRASES, SOURCE_MIN_SCORES
+
     output  = {}
     dropped = 0
 
     for category, articles in category_buckets.items():
-        clean = [a for a in articles if not is_noise(a)]
-        dropped += len(articles) - len(clean)
+
+        clean = []
+
+        for article in articles:
+
+            # Pass 1: content noise
+            if is_noise(article):
+                dropped += 1
+                continue
+
+            # Pass 2: source-level minimum score
+            # At this point articles may not be scored yet,
+            # so we do a quick keyword pre-check for noisy sources
+            source = article.get("source", "")
+            min_score = SOURCE_MIN_SCORES.get(source, 0)
+
+            if min_score > 0:
+                # Quick pre-score check using keyword count
+                text = (
+                    article.get("title", "") + " " +
+                    article.get("snippet", "")
+                ).lower()
+
+                hits = sum(
+                    1 for kw in [
+                        "life insurance", "annuity", "actuari",
+                        "reserve", "valuation", "reinsurance",
+                        "rbc", "ldti", "vm-20", "vm-22", "pbr",
+                        "mortality", "fia", "rila", "iul", "alm",
+                        "capital", "hedging", "policyholder",
+                    ]
+                    if kw in text
+                )
+
+                if hits == 0:
+                    dropped += 1
+                    continue
+
+            clean.append(article)
+
         if clean:
             output[category] = clean
 
     print(f"    Noise filter dropped {dropped} articles")
     return output
+
 
 # ---------------------------------------------------------------------
 # Actuarial Function Tagging
