@@ -17,7 +17,7 @@ RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
 
 IS_FRIDAY = datetime.utcnow().weekday() == 4
 
-DAYS_BACK               = 7 if IS_FRIDAY else 3
+DAYS_BACK               = 7 if IS_FRIDAY else 30
 MAX_ARTICLES_PER_QUERY  = 10
 MAX_ARTICLES_PER_SECTION = 15
 
