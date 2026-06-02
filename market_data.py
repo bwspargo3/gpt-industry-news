@@ -136,9 +136,9 @@ def generate_market_narrative(snapshot):
     ig = additional.get("IG_OAS")
     hy = additional.get("HY_OAS")
     if ig:
-        lines.append(f"IG Credit Spread (OAS): {ig['value']:.0f} bps")
+        lines.append(f"IG Credit Spread (OAS): {ig['value'] * 100:.0f} bps")
     if hy:
-        lines.append(f"HY Credit Spread (OAS): {hy['value']:.0f} bps")
+        lines.append(f"HY Credit Spread (OAS): {hy['value'] * 100:.0f} bps")
 
     # Inflation breakeven
     be = additional.get("BREAKEVEN_10Y")
