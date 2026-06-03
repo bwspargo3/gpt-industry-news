@@ -228,4 +228,68 @@ DIRECT_RSS_FEEDS = [
         "KPMG Insurance",
         "https://kpmg.com/us/en/articles/insurance.rss"
     ),
+    # Add to DIRECT_RSS_FEEDS in data_sources.py
+
+# Best's Review / AM Best editorial (different from their PR wire)
+(
+    "Trade Press",
+    "Best's Review",
+    "https://www.ambest.com/rss/bestreview.rss"
+),
+
+# National Underwriter Life & Health
+(
+    "Trade Press",
+    "National Underwriter Life & Health",
+    "https://www.lifehealthpro.com/feed"
+),
+
+# Insurance Forums / Carrier Management
+(
+    "Trade Press",
+    "Carrier Management",
+    "https://www.carriermanagement.com/feed/"
+),
+
+# Reinsurance News
+(
+    "Reinsurance",
+    "Reinsurance News",
+    "https://www.reinsurancene.ws/feed/"
+),
+
+# Intelligent Insurer (already surfacing in your results via Google News)
+(
+    "Trade Press",
+    "Intelligent Insurer",
+    "https://www.intelligentinsurer.com/rss"
+),
+
+# The Actuary Magazine (SOA publication)
+(
+    "SOA / AAA Research",
+    "The Actuary Magazine",
+    "https://www.theactuary.com/rss"
+),
+
+# Insurance Asset Management
+(
+    "Investments & ALM",
+    "Insurance Asset Management",
+    "https://insuranceassetmanagement.net/feed/"
+),
+
+# Global Reinsurance
+(
+    "Reinsurance",
+    "Global Reinsurance",
+    "https://www.globalreinsurance.com/rss"
+),
+
+# Pensions & Investments — insurance/annuity coverage
+(
+    "Investments & ALM",
+    "Pensions & Investments",
+    "https://www.pionline.com/rss/all"
+),
 ]
