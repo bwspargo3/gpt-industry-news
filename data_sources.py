@@ -4,7 +4,6 @@
 # -----------------------------------------------------------------------------
 
 SEARCH_QUERIES = [
-
     # Reserving / Valuation
     ("Valuation & Reserving", "VM-20 life insurance reserve"),
     ("Valuation & Reserving", "VM-22 annuity reserve"),
@@ -60,15 +59,25 @@ SEARCH_QUERIES = [
     ("Consulting & Research", "PwC life insurance capital reserving"),
     ("Consulting & Research", "KPMG life insurance regulatory update"),
     ("Consulting & Research", "WTW Willis Towers Watson life insurance report"),
+    
+    # -------------------------------------------------------------------------
+    # Targeted Publication Proxy Feeds
+    # Using Google News to bypass corporate firewalls and 404s
+    # -------------------------------------------------------------------------
+    ("SOA / AAA Research", '"Society of Actuaries" OR "American Academy of Actuaries" research report'),
+    ("Annuity Market", '"LIMRA" annuity sales'),
+    ("Annuity Market", '"ThinkAdvisor" annuity OR life insurance'),
+    ("Life Product Developments", '"InsuranceNewsNet" life insurance OR annuity'),
+    ("Life Product Developments", '"Life Annuity Specialist"'),
+    ("Regulatory", '"Federal Register" IRS OR DOL life insurance annuity'),
 ]
 
 # -----------------------------------------------------------------------------
-# Carrier Watchlist — specific enough to avoid false positives
+# Carrier Watchlist
 # (category, query)
 # -----------------------------------------------------------------------------
 
 CARRIER_SEARCH_QUERIES = [
-
     # Kansas City / Midwest
     ("Carrier Intelligence", "Kansas City Life Insurance company"),
     ("Carrier Intelligence", "Ameritas Life Partners insurance annuity"),
@@ -90,206 +99,40 @@ CARRIER_SEARCH_QUERIES = [
     ("Carrier Intelligence", "Transamerica life insurance annuity"),
     ("Carrier Intelligence", "Mutual of Omaha life insurance"),
 
-    # Firm self-monitoring
+    # Corporate References
     ("Carrier Intelligence", "Actuarial Resources Corporation ARC actuarial"),
     ("Carrier Intelligence", "Springline advisory actuarial consulting"),
 ]
 
 # -----------------------------------------------------------------------------
-# Direct RSS Feeds — primary sources only, no Google News intermediary
+# Direct HTML Scrape Targets (Bypassing RSS entirely)
 # (category, source_name, url)
 # -----------------------------------------------------------------------------
 
-DIRECT_RSS_FEEDS = [
-
-    # SOA
+HTML_SCRAPE_TARGETS = [
     (
-        "SOA / AAA Research",
-        "SOA News",
-        "https://www.soa.org/rss/news/"
+        "SOA / AAA Research", 
+        "SOA Research", 
+        "https://www.soa.org/resources/research-reports/"
     ),
     (
-        "SOA / AAA Research",
-        "SOA Research",
-        "https://www.soa.org/rss/research/"
-    ),
-
-    # American Academy of Actuaries
-    (
-        "SOA / AAA Research",
-        "American Academy of Actuaries",
-        "https://www.actuary.org/feed"
-    ),
-
-    # NAIC
-    (
-        "Regulatory",
-        "NAIC Newsroom",
-        "https://content.naic.org/rss.xml"
-    ),
-
-    # LIMRA
-    (
-        "Annuity Market",
-        "LIMRA",
-        "https://www.limra.com/rss/"
-    ),
-
-    # ThinkAdvisor
-    (
-        "Annuity Market",
-        "ThinkAdvisor",
-        "https://www.thinkadvisor.com/feed/"
-    ),
-
-    # Life Annuity Specialist
-    (
-        "Annuity Market",
-        "Life Annuity Specialist",
-        "https://lifeannuityspecialist.com/feed/"
-    ),
-
-    # Insurance News Net
-    (
-        "Life Product Developments",
-        "Insurance News Net",
-        "https://insurancenewsnet.com/rss"
-    ),
-
-    # AM Best — actual ratings feed, not PR wire
-    (
-        "Rating Agency Actions",
-        "AM Best Ratings",
-        "https://www.ambest.com/rss/ratings.rss"
+        "Annuity Market", 
+        "LIMRA", 
+        "https://www.limra.com/en/newsroom/"
     ),
     (
-        "Rating Agency Actions",
-        "AM Best News",
-        "https://www.ambest.com/rss/latestnews.rss"
-    ),
-
-    # Insurance Journal — life/annuity content filtered by scoring
-    (
-        "Life Product Developments",
-        "Insurance Journal",
-        "https://www.insurancejournal.com/feed/"
-    ),
-
-    # Federal Register — IRS and DOL guidance affecting life/annuity
-    (
-        "Regulatory",
-        "Federal Register (IRS)",
-        "https://www.federalregister.gov/api/v1/articles.rss"
-        "?agencies[]=internal-revenue-service"
-        "&topics[]=life-insurance"
-    ),
-    # In DIRECT_RSS_FEEDS, REPLACE the two Federal Register entries with:
-
-    # Federal Register — tighter topic filter applied in scoring
-    (
-        "Regulatory",
-        "Federal Register (IRS Life)",
-        "https://www.federalregister.gov/api/v1/articles.rss"
-        "?agencies[]=internal-revenue-service"
-        "&topics[]=life-insurance"
-    ),
-    # Note: removed the broad DOL EBSA feed — too noisy
-
-    # Consulting Firm Research
-    (
-        "Consulting & Research",
-        "Milliman Insights",
-        "https://www.milliman.com/en/insight/rss"
+        "Annuity Market", 
+        "ThinkAdvisor", 
+        "https://www.thinkadvisor.com/life-health/"
     ),
     (
-        "Consulting & Research",
-        "Oliver Wyman Insurance",
-        "https://www.oliverwyman.com/our-expertise/industries/"
-        "financial-services/insurance.rss"
+        "Life Product Developments", 
+        "InsuranceNewsNet", 
+        "https://insurancenewsnet.com/topics/top-stories"
     ),
     (
-        "Consulting & Research",
-        "Deloitte Insurance",
-        "https://www2.deloitte.com/us/en/pages/financial-services/"
-        "topics/insurance.rss"
+        "Life Product Developments", 
+        "Life Annuity Specialist", 
+        "https://www.lifeannuityspecialist.com/"
     ),
-    (
-        "Consulting & Research",
-        "EY Insurance",
-        "https://www.ey.com/en_us/industries/insurance.rss"
-    ),
-    (
-        "Consulting & Research",
-        "WTW Insurance Research",
-        "https://www.wtwco.com/en-us/insights/rss?practice=insurance"
-    ),
-    (
-        "Consulting & Research",
-        "KPMG Insurance",
-        "https://kpmg.com/us/en/articles/insurance.rss"
-    ),
-    # Add to DIRECT_RSS_FEEDS in data_sources.py
-
-# Best's Review / AM Best editorial (different from their PR wire)
-(
-    "Trade Press",
-    "Best's Review",
-    "https://www.ambest.com/rss/bestreview.rss"
-),
-
-# National Underwriter Life & Health
-(
-    "Trade Press",
-    "National Underwriter Life & Health",
-    "https://www.lifehealthpro.com/feed"
-),
-
-# Insurance Forums / Carrier Management
-(
-    "Trade Press",
-    "Carrier Management",
-    "https://www.carriermanagement.com/feed/"
-),
-
-# Reinsurance News
-(
-    "Reinsurance",
-    "Reinsurance News",
-    "https://www.reinsurancene.ws/feed/"
-),
-
-# Intelligent Insurer (already surfacing in your results via Google News)
-(
-    "Trade Press",
-    "Intelligent Insurer",
-    "https://www.intelligentinsurer.com/rss"
-),
-
-# The Actuary Magazine (SOA publication)
-(
-    "SOA / AAA Research",
-    "The Actuary Magazine",
-    "https://www.theactuary.com/rss"
-),
-
-# Insurance Asset Management
-(
-    "Investments & ALM",
-    "Insurance Asset Management",
-    "https://insuranceassetmanagement.net/feed/"
-),
-
-# Global Reinsurance
-(
-    "Reinsurance",
-    "Global Reinsurance",
-    "https://www.globalreinsurance.com/rss"
-),
-
-# Pensions & Investments — insurance/annuity coverage
-(
-    "Investments & ALM",
-    "Pensions & Investments",
-    "https://www.pionline.com/rss/all"
-),
 ]
