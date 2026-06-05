@@ -7,7 +7,7 @@ from intelligence import (
     summarize_with_groq
 )
 from email_template import build_email_html
-from market_data import build_market_snapshot  # Corrected function name
+from market_data import build_market_snapshot
 import email_sender
 
 def run_digest():
@@ -22,7 +22,6 @@ def run_digest():
     category_buckets = score_and_tag(filtered)
     
     # 3. Market data and LLM Summary
-    # Updated to call the correctly named function
     market = build_market_snapshot() 
     summary = summarize_with_groq(category_buckets, market)
     
