@@ -22,6 +22,25 @@ from naic_latf import fetch_naic_latf, build_naic_change_log
 
 import os
 import json
+import html as html_lib
+
+def clean_snippet(text: str) -> str:
+    """
+    Strips HTML tags, unescapes HTML entities, removes non-breaking
+    spaces, and normalizes whitespace. Safe to call on any string.
+    """
+    if not text:
+        return ""
+    # Strip HTML tags
+    text = re.sub(r"<[^>]+>", " ", text)
+    # Unescape entities (&nbsp; &amp; etc.)
+    text = html_lib.unescape(text)
+    # Replace non-breaking space characters
+    text = text.replace("\xa0", " ").replace("\u200b", "")
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
 
 SESSION = requests.Session()
 SESSION.headers.update({
@@ -143,7 +162,7 @@ def parse_rss_feed(content, source_name=""):
                     "url":     link.strip(),
                     "source":  source_name,
                     "date":    date_str,
-                    "snippet": re.sub(r"<[^>]+>", "", desc)[:400],
+                    "snippet": clean_snippet(desc)[:400],
                 })
             return result
         except Exception as e2:
@@ -312,26 +331,42 @@ def deduplicate_articles(articles):
 def filter_noise(articles):
     filtered = []
     dropped  = 0
+
+    # Keywords that must appear for an article to survive
+    # if its source has a minimum-score requirement
     life_kws = [
         "life insurance", "annuity", "actuari", "reserve", "valuation",
         "reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
         "mortality", "fia", "rila", "iul", "alm", "capital",
-        "hedging", "policyholder", "myga", "solvency", "pension",
-        "retirement income",
+        "hedging", "policyholder", "myga", "solvency",
+        "life insurer", "life reinsurance",
     ]
+
     for a in articles:
-        text = (a["title"] + " " + a.get("snippet", "")).lower()
+        # Clean snippet before noise checking
+        a["snippet"] = clean_snippet(a.get("snippet") or "")
+
+        text = (
+            (a.get("title") or "") + " " + a["snippet"]
+        ).lower()
+
+        # Content-based noise phrases
         if any(phrase in text for phrase in NOISE_PHRASES):
             dropped += 1
             continue
-        min_hits = SOURCE_MIN_SCORES.get(a.get("source", ""), 0)
+
+        # Source-level keyword gate
+        min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
         if min_hits > 0:
             if not any(kw in text for kw in life_kws):
                 dropped += 1
                 continue
+
         filtered.append(a)
+
     print(f"  Noise filter: dropped {dropped}, kept {len(filtered)}")
     return filtered
+
 
 # ------------------------------------------------------------------
 # Score and tag
