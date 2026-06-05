@@ -68,11 +68,11 @@ def main():
 
     print("[8] Building HTML email...")
     html = build_email_html(
-        summary,
         market,
         category_buckets,
-        consulting_opportunities,
+        summary
     )
+
 
     print("[9] Sending email...")
     send_email("Life & Annuity Actuarial Intelligence | ARC", html)
