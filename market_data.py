@@ -1,69 +1,127 @@
 import requests
-from config import TREASURY_SERIES, FRED_ADDITIONAL
+from datetime import datetime, timedelta
+
+# ---------------------------------------------------------------------
+# FRED JSON API — no API key required for public series
+# More reliable than the CSV endpoint
+# ---------------------------------------------------------------------
+
+FRED_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+# Treasury yields
+TREASURY_SERIES = {
+    "2Y":  "DGS2",
+    "5Y":  "DGS5",
+    "10Y": "DGS10",
+    "30Y": "DGS30",
+}
+
+# Additional market indicators
+# OAS series are in PERCENT (e.g. 0.77 = 77 bps) — multiply by 100 for display
+# VIX is in Index points (e.g. 16.1) — display as-is
+# T10YIE is in percent (e.g. 2.40) — display as-is
+ADDITIONAL_SERIES = {
+    "IG_OAS":        ("BAMLC0A0CM",  "pct_to_bps"),  # multiply × 100
+    "HY_OAS":        ("BAMLH0A0HYM2","pct_to_bps"),  # multiply × 100
+    "BREAKEVEN_10Y": ("T10YIE",      "pct"),          # display as-is
+    "VIX":           ("VIXCLS",      "index"),        # display as-is
+}
 
 
-def fetch_fred_series(series_id):
+def fetch_fred_csv(series_id):
     """
-    Fetches the most recent non-null value for a FRED series.
-    Returns {"date": str, "value": float} or None on any failure.
+    Fetches the most recent non-null observation for a FRED series
+    via the public CSV endpoint (no API key required).
+    Returns {"date": str, "value": float} or None.
     """
+    url = f"{FRED_BASE}?id={series_id}"
     try:
-        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
 
-        lines = response.text.strip().splitlines()
+        lines = resp.text.strip().splitlines()
+        # Walk backwards to find the most recent non-missing value
         for row in reversed(lines[1:]):
             parts = row.split(",")
             if len(parts) < 2:
                 continue
-            date_str, value = parts[0], parts[1]
-            if value not in (".", ""):
-                return {"date": date_str, "value": float(value)}
+            date_str, raw_value = parts[0].strip(), parts[1].strip()
+            if raw_value in (".", "", "NA"):
+                continue
+            try:
+                return {"date": date_str, "value": float(raw_value)}
+            except ValueError:
+                continue
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"    FRED error [{series_id}]: {e}")
 
     return None
 
 
-def fetch_treasury_yields():
-    return {
-        label: fetch_fred_series(series_id)
-        for label, series_id in TREASURY_SERIES.items()
-    }
-
-
 def fetch_sofr():
+    """
+    NY Fed SOFR — most recent rate.
+    Returns {"date": str, "value": float} or None.
+    """
     try:
-        response = requests.get(
+        resp = requests.get(
             "https://markets.newyorkfed.org/api/rates/sofr/last/1.json",
             timeout=15,
         )
-        response.raise_for_status()
-        item = response.json()["refRates"][0]
-        return {"date": item["effectiveDate"], "value": float(item["percentRate"])}
-    except Exception:
+        resp.raise_for_status()
+        item = resp.json()["refRates"][0]
+        return {
+            "date":  item["effectiveDate"],
+            "value": float(item["percentRate"]),
+        }
+    except Exception as e:
+        print(f"    SOFR error: {e}")
         return None
 
 
-def fetch_additional_market_data():
-    return {
-        key: fetch_fred_series(series_id)
-        for key, series_id in FRED_ADDITIONAL.items()
+def build_market_snapshot():
+    """
+    Fetches all market data and returns a structured dict.
+    Every value is either {"date": str, "value": float} or None —
+    never a missing key.
+    """
+    treasuries = {
+        label: fetch_fred_csv(sid)
+        for label, sid in TREASURY_SERIES.items()
     }
 
+    sofr = fetch_sofr()
 
-def build_market_snapshot():
-    treasuries = fetch_treasury_yields()
-    sofr       = fetch_sofr()
-    additional = fetch_additional_market_data()
-
-    spread = None
+    # 2Y/10Y spread
     t2  = treasuries.get("2Y")
     t10 = treasuries.get("10Y")
-    if t2 and t10:
-        spread = t10["value"] - t2["value"]
+    spread = (
+        round(t10["value"] - t2["value"], 4)
+        if t2 and t10 else None
+    )
+
+    # Additional — fetch raw, store raw value + unit tag
+    additional = {}
+    for key, (series_id, unit_type) in ADDITIONAL_SERIES.items():
+        raw = fetch_fred_csv(series_id)
+        if raw:
+            # Convert OAS from percent to bps immediately at fetch time
+            # so the rest of the code never has to remember to multiply
+            if unit_type == "pct_to_bps":
+                additional[key] = {
+                    "date":  raw["date"],
+                    "value": round(raw["value"] * 100, 1),  # now in bps
+                    "unit":  "bps",
+                }
+            else:
+                additional[key] = {
+                    "date":  raw["date"],
+                    "value": raw["value"],
+                    "unit":  unit_type,
+                }
+        else:
+            additional[key] = None
 
     return {
         "treasuries": treasuries,
@@ -73,38 +131,52 @@ def build_market_snapshot():
     }
 
 
+def safe_pct(item, decimals=2):
+    """Format a market item as a percentage string, or N/A."""
+    if not item:
+        return "N/A"
+    return f"{item['value']:.{decimals}f}%"
+
+
+def safe_val(item, fmt="{:.1f}", suffix=""):
+    """Format a market item with arbitrary format, or N/A."""
+    if not item:
+        return "N/A"
+    try:
+        return fmt.format(item["value"]) + suffix
+    except Exception:
+        return "N/A"
+
+
 def generate_market_narrative(snapshot):
     """
-    Produces a plain-text market summary for injection into the Groq prompt.
-    All values safely guarded against None.
+    Plain-text market summary for injection into the Groq prompt.
+    All values are safely guarded.
     """
-    t          = snapshot.get("treasuries", {})
-    spread     = snapshot.get("spread")
-    additional = snapshot.get("additional", {})
+    t    = snapshot.get("treasuries", {})
+    add  = snapshot.get("additional", {})
+    sofr = snapshot.get("sofr")
+    sprd = snapshot.get("spread")
 
-    def safe_pct(item, decimals=2):
-        return f"{item['value']:.{decimals}f}%" if item else "N/A"
+    spread_str = (
+        f"{sprd:+.2f}% ({'normal' if sprd > 0 else 'inverted'})"
+        if sprd is not None else "N/A"
+    )
 
-    def safe_bps(item):
-        # FRED OAS series are in percent (0.77 = 77 bps)
-        return f"{item['value'] * 100:.0f} bps" if item else "N/A"
+    ig  = add.get("IG_OAS")
+    hy  = add.get("HY_OAS")
+    be  = add.get("BREAKEVEN_10Y")
+    vix = add.get("VIX")
 
-    def safe_float(item, decimals=1):
-        return f"{item['value']:.{decimals}f}" if item else "N/A"
-
-    lines = [
+    return "\n".join([
         f"2Y Treasury:             {safe_pct(t.get('2Y'))}",
         f"5Y Treasury:             {safe_pct(t.get('5Y'))}",
         f"10Y Treasury:            {safe_pct(t.get('10Y'))}",
         f"30Y Treasury:            {safe_pct(t.get('30Y'))}",
-        f"SOFR:                    {safe_pct(snapshot.get('sofr'))}",
-        f"2Y/10Y Spread:           "
-        + (f"{spread:+.2f}% ({'normal' if spread > 0 else 'inverted'} curve)"
-           if spread is not None else "N/A"),
-        f"IG Credit Spread (OAS):  {safe_bps(additional.get('IG_OAS'))}",
-        f"HY Credit Spread (OAS):  {safe_bps(additional.get('HY_OAS'))}",
-        f"10Y Inflation Breakeven: {safe_pct(additional.get('BREAKEVEN_10Y'))}",
-        f"VIX:                     {safe_float(additional.get('VIX'))}",
-    ]
-
-    return "\n".join(lines)
+        f"SOFR:                    {safe_pct(sofr)}",
+        f"2Y/10Y Spread:           {spread_str}",
+        f"IG Credit Spread (OAS):  {safe_val(ig, '{:.0f}', ' bps')}",
+        f"HY Credit Spread (OAS):  {safe_val(hy, '{:.0f}', ' bps')}",
+        f"10Y Inflation Breakeven: {safe_pct(be)}",
+        f"VIX:                     {safe_val(vix, '{:.1f}')}",
+    ])
