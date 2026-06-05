@@ -230,17 +230,19 @@ def build_impact_section(category_buckets, level,
         for i, a in enumerate(matching[:config.MAX_ARTICLES_PER_SECTION]):
             bg       = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
             tag_html = build_tag_badges(a.get("tags", ["GENERAL"]))
-            snippet  = html_escape(a.get("snippet", ""))
+            snippet  = html_escape(a.get("snippet") or "")
+            title    = html_escape(a.get("title") or "No title")
+            source   = html_escape(a.get("source") or "")
+            date     = html_escape(a.get("date") or "")
+            url      = a.get("url") or "#"
 
             rows += (
                 f"<tr><td style='padding:16px;background:{bg};"
                 f"border-bottom:1px solid #F1F5F9;border-radius:4px;'>"
                 f"<div style='margin-bottom:6px;'>{tag_html}</div>"
-                f"<div style='font-weight:700;font-size:14px;"
-                f"line-height:1.4;'>"
-                f"<a href='{a['url']}' style='color:#2563EB;"
-                f"text-decoration:none;'>"
-                f"{html_escape(a['title'])}</a></div>"
+                f"<div style='font-weight:700;font-size:14px;line-height:1.4;'>"
+                f"<a href='{url}' style='color:#2563EB;text-decoration:none;'>"
+                f"{title}</a></div>"
                 + (
                     f"<div style='color:#475569;font-size:13px;"
                     f"margin-top:6px;line-height:1.6;'>{snippet}</div>"
@@ -249,11 +251,10 @@ def build_impact_section(category_buckets, level,
                 + f"<div style='color:#94A3B8;font-size:11px;"
                 f"margin-top:8px;font-weight:600;"
                 f"text-transform:uppercase;letter-spacing:.4px;'>"
-                f"{html_escape(a.get('source',''))}"
-                f"&nbsp;&bull;&nbsp;"
-                f"{html_escape(a.get('date',''))}</div>"
+                f"{source}&nbsp;&bull;&nbsp;{date}</div>"
                 f"</td></tr>"
             )
+
 
     if not rows:
         return ""
