@@ -66,6 +66,19 @@ def fetch_naic_latf():
     seen_cache = load_naic_cache()
     new_seen = set(seen_cache)
 
+    NAV_NOISE = {
+        "committee", "working group", "subgroup", "task force",
+        "materials", "membership", "agenda", "minutes",
+        "reporting", "online", "access", "view",
+        "forms", "tools", "calendar", "events"
+    }
+
+    DOC_KEYWORDS = {
+        "report", "study", "impact", "faq", "memo",
+        "analysis", "guideline", "proposal", "update",
+        "exposure", "draft", "framework", "recommendation"
+    }
+
     try:
         resp = requests.get(
             "https://content.naic.org/cmte_a_latf.htm",
@@ -79,77 +92,44 @@ def fetch_naic_latf():
             re.IGNORECASE | re.DOTALL,
         )
 
-        # -----------------------------
-        # STRONG NOISE DEFINITIONS
-        # -----------------------------
-        hard_noise = [
-            "committee", "working group", "subgroup", "task force",
-            "minutes", "agenda", "membership", "materials",
-            "view", "access", "forms", "tools", "reporting",
-            "online", "home", "index", "about"
-        ]
-
-        # -----------------------------
-        # DOCUMENT QUALITY SIGNALS
-        # -----------------------------
-        doc_boost = [
-            "report", "study", "impact", "analysis", "faq",
-            "memo", "guideline", "update", "draft", "exposure",
-            "proposal", "model", "framework"
-        ]
-
-        high_value_topics = [
-            "vm-20", "vm20", "vm-21", "vm-22",
-            "pbr", "principle-based", "rbc",
-            "longevity", "mortality", "hedging",
-            "economic scenario", "goes"
-        ]
-
-        def score_item(text: str, href: str) -> int:
-            t = text.lower()
-            h = href.lower()
-
-            score = 0
-
-            # kill obvious nav pages
-            if any(x in t for x in hard_noise):
-                return -999
-
-            # doc type signals
-            score += sum(3 for x in doc_boost if x in t)
-
-            # actuarial relevance boost
-            score += sum(4 for x in high_value_topics if x in t)
-
-            # file-type preference
-            if any(ext in h for ext in [".pdf", ".doc", ".docx"]):
-                score += 5
-
-            # penalize generic pages
-            if len(t.split()) < 4:
-                score -= 2
-
-            return score
-
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+            text_l = text.lower()
 
-            if len(text) < 8:
-                continue
-
+            # -------------------------
+            # normalize URL
+            # -------------------------
             if href.startswith("/"):
                 href = "https://content.naic.org" + href
             elif not href.startswith("http"):
                 continue
 
-            score = score_item(text, href)
-
-            # reject low quality
-            if score < 3:
+            # -------------------------
+            # basic quality filters
+            # -------------------------
+            if len(text) < 10:
                 continue
 
-            key = (text + "|" + href).lower().strip()
+            if any(n in text_l for n in NAV_NOISE):
+                continue
+
+            # -------------------------
+            # must look like a LATF document (not just a page link)
+            # -------------------------
+            if not any(k in text_l for k in DOC_KEYWORDS):
+                continue
+
+            # remove obvious non-content links
+            if any(x in href.lower() for x in [
+                "login", "search", "calendar", "committee", "working"
+            ]):
+                continue
+
+            # -------------------------
+            # dedupe key (stable + avoids duplicates across runs)
+            # -------------------------
+            key = re.sub(r"[^a-z0-9]", "", (text + href).lower())[:160]
 
             if key in seen_cache:
                 continue
@@ -161,18 +141,14 @@ def fetch_naic_latf():
                 "url": href,
                 "source": "NAIC LATF",
                 "date": datetime.utcnow().strftime("%b %d, %Y"),
-                "snippet": f"NAIC LATF document (score={score}): {text}",
+                "snippet": f"NAIC LATF document: {text}",
                 "category": "Regulatory",
                 "is_new": True,
-                "score": score
             })
 
         save_naic_cache(new_seen)
 
-        # sort best first
-        articles.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-        print(f"    NAIC LATF (FILTERED + SCORED): {len(articles)}")
+        print(f"    NAIC LATF (NEW ONLY): {len(articles)}")
 
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
