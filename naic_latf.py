@@ -198,16 +198,18 @@ def fetch_naic_latf():
 # CHANGE LOG FOR LLM
 # -----------------------------
 def build_naic_change_log(new_items):
-    if not new_items:
+    # Filter to only genuine NAIC LATF records — regular news articles
+    # from the Regulatory bucket don't have doc_type and must be excluded
+    latf_items = [i for i in new_items if "doc_type" in i]
+
+    if not latf_items:
         return "No new NAIC LATF developments."
 
     grouped = {}
-
-    for item in new_items:
+    for item in latf_items:
         grouped.setdefault(item["doc_type"], []).append(item)
 
     lines = ["NAIC LATF Changes (since last run):"]
-
     for k, v in grouped.items():
         lines.append(f"\n[{k.upper()}]")
         for i in v[:10]:
