@@ -496,23 +496,6 @@ Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
     except Exception as e:
         print(f"    Groq error: {e}")
         return "Briefing unavailable."
-                "exposure draft", "draft", "proposed", "agenda",
-                "minutes", "adopted", "model", "actuarial guideline",
-                "vm-", "pbr", "reserve", "annuity", "life",
-                "latf", "task force",
-            ]):
-                articles.append({
-                    "title":    f"[NAIC LATF] {text}",
-                    "url":      href,
-                    "source":   "NAIC LATF",
-                    "date":     datetime.utcnow().strftime("%b %d, %Y"),
-                    "snippet":  f"Document on NAIC LATF page: {text}",
-                    "category": "Regulatory",
-                })
-        print(f"    NAIC LATF: {len(articles)} documents")
-    except Exception as e:
-        print(f"    NAIC LATF error: {e}")
-    return articles
 
 # ------------------------------------------------------------------
 # RSS parser — tolerant of malformed XML
