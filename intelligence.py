@@ -18,11 +18,10 @@ from data_sources import (
     NEWSAPI_QUERIES,
 )
 from market_data import generate_market_narrative
+from naic_latf import fetch_naic_latf, build_naic_change_log
 
 import os
 import json
-
-NAIC_CACHE_FILE = "naic_latf_cache.json"
 
 SESSION = requests.Session()
 SESSION.headers.update({
@@ -36,166 +35,6 @@ BROWSER_HEADERS = {
     "Connection": "keep-alive",
 }
 
-# ------------------------------------------------------------------
-# NAIC CACHE
-# ------------------------------------------------------------------
-
-def load_naic_cache():
-    if not os.path.exists(NAIC_CACHE_FILE):
-        return set()
-    try:
-        with open(NAIC_CACHE_FILE, "r") as f:
-            return set(json.load(f))
-    except Exception:
-        return set()
-
-def save_naic_cache(cache_set):
-    try:
-        with open(NAIC_CACHE_FILE, "w") as f:
-            json.dump(list(cache_set), f)
-    except Exception as e:
-        print(f"NAIC cache save error: {e}")
-
-# ------------------------------------------------------------------
-# NAIC LATF SCRAPER (FIXED)
-# ------------------------------------------------------------------
-
-def fetch_naic_latf():
-    import re
-    from bs4 import BeautifulSoup
-
-    BASE_URL = "https://content.naic.org"
-    INDEX_URL = f"{BASE_URL}/cmte_a_latf.htm"
-
-    seen_cache = load_naic_cache()
-    new_seen = set(seen_cache)
-
-    NAV_NOISE = {
-        "committee", "working group", "subgroup", "task force",
-        "materials", "membership", "agenda", "minutes",
-        "calendar", "events", "forms", "tools", "access"
-    }
-
-    DOC_TYPE_MAP = {
-        "impact": "impact_study",
-        "report": "report",
-        "faq": "faq",
-        "memo": "memo",
-        "exposure": "exposure_draft",
-        "draft": "exposure_draft",
-        "update": "update",
-        "guideline": "guideline",
-        "study": "study",
-    }
-
-    def classify_doc_type(text):
-        t = text.lower()
-        for k, v in DOC_TYPE_MAP.items():
-            if k in t:
-                return v
-        return "other"
-
-    def extract_date(soup):
-        # try common NAIC patterns first
-        text = soup.get_text(" ", strip=True)
-
-        patterns = [
-            r"(\d{4}-\d{2}-\d{2})",
-            r"([A-Z][a-z]{2,9} \d{1,2}, \d{4})",
-        ]
-
-        for p in patterns:
-            m = re.search(p, text)
-            if m:
-                return m.group(1)
-
-        return None
-
-    def extract_snippet(soup):
-        paragraphs = soup.find_all("p")
-        for p in paragraphs:
-            txt = p.get_text(" ", strip=True)
-            if len(txt) > 80:
-                return txt[:300]
-        return ""
-
-    articles = []
-
-    try:
-        resp = requests.get(INDEX_URL, headers=BROWSER_HEADERS, timeout=20)
-        resp.raise_for_status()
-
-        soup = BeautifulSoup(resp.text, "lxml")
-
-        links = soup.select("a[href]")
-
-        for a in links:
-            text = a.get_text(strip=True)
-            href = a.get("href", "")
-
-            if not text or len(text) < 10:
-                continue
-
-            text_l = text.lower()
-
-            if any(n in text_l for n in NAV_NOISE):
-                continue
-
-            if href.startswith("/"):
-                url = BASE_URL + href
-            elif href.startswith("http"):
-                url = href
-            else:
-                continue
-
-            key = re.sub(r"[^a-z0-9]", "", (text + url).lower())[:160]
-
-            if key in seen_cache:
-                continue
-
-            # -------------------------
-            # FETCH DETAIL PAGE
-            # -------------------------
-            try:
-                page = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
-                page.raise_for_status()
-                page_soup = BeautifulSoup(page.text, "lxml")
-            except Exception:
-                continue
-
-            full_text = page_soup.get_text(" ", strip=True).lower()
-
-            # skip non-content pages
-            if not any(k in full_text for k in ["latf", "valuation", "life insurance"]):
-                continue
-
-            doc_type = classify_doc_type(text + " " + full_text)
-            date = extract_date(page_soup)
-            snippet = extract_snippet(page_soup)
-
-            article = {
-                "title": text,
-                "doc_type": doc_type,
-                "committee": "LATF",
-                "date": date,
-                "url": url,
-                "snippet": snippet,
-                "source": "NAIC LATF",
-                "category": "Regulatory",
-                "is_structured": True,
-            }
-
-            new_seen.add(key)
-            articles.append(article)
-
-        save_naic_cache(new_seen)
-
-        print(f"    NAIC LATF structured: {len(articles)}")
-
-    except Exception as e:
-        print(f"    NAIC LATF error: {e}")
-
-    return articles
 # ------------------------------------------------------------------
 # NewsAPI Fetcher (The primary replacement for HTML scraping)
 # ------------------------------------------------------------------
@@ -408,7 +247,8 @@ def collect_news():
             raw.append(a)
 
     print("  NAIC LATF...")
-    add("Regulatory", fetch_naic_latf(), "NAIC LATF")
+    naic_new = fetch_naic_latf()
+    add("Regulatory", naic_new, "NAIC LATF")
 
     print("  SEC EDGAR...")
     add("SEC Filings", fetch_edgar_filings(), "SEC EDGAR")
@@ -588,6 +428,9 @@ RULES:
 
 MARKET DATA:
 {market_narrative}
+
+NAIC_LATF_DELTA:
+{build_naic_change_log(category_buckets.get("Regulatory", []))}
 
 ARTICLES:
 {news_context}
