@@ -19,90 +19,74 @@ from data_sources import (
 )
 from market_data import generate_market_narrative
 
-# ---------------------------------------------------------------------
-# Browser headers — reduces 403s
-# ---------------------------------------------------------------------
-
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;"
-        "q=0.9,image/avif,image/webp,*/*;q=0.8"
-    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Connection":      "keep-alive",
+    "Connection": "keep-alive",
 }
 
-# ---------------------------------------------------------------------
-# NAIC LATF Scraper
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# NAIC LATF scraper
+# ------------------------------------------------------------------
 
 def fetch_naic_latf():
     articles = []
     try:
         resp = requests.get(
             "https://content.naic.org/cmte_a_latf.htm",
-            headers=BROWSER_HEADERS,
-            timeout=20,
+            headers=BROWSER_HEADERS, timeout=20,
         )
         resp.raise_for_status()
-
         pattern   = re.compile(
             r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
             re.IGNORECASE | re.DOTALL,
         )
-        seen_urls = set()
-
+        seen = set()
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
-
             if not any(ext in href.lower() for ext in
                        [".pdf", ".docx", ".doc", ".htm", ".html"]):
                 continue
-            if len(text) < 10 or href in seen_urls:
+            if len(text) < 10 or href in seen:
                 continue
-            seen_urls.add(href)
-
+            seen.add(href)
             if href.startswith("/"):
                 href = "https://content.naic.org" + href
             elif not href.startswith("http"):
                 continue
-
             if any(kw in text.lower() for kw in [
                 "exposure draft", "draft", "proposed", "agenda",
                 "minutes", "adopted", "model", "actuarial guideline",
-                "vm-", "pbr", "reserve", "annuity", "life", "latf",
-                "task force",
+                "vm-", "pbr", "reserve", "annuity", "life",
+                "latf", "task force",
             ]):
                 articles.append({
                     "title":    f"[NAIC LATF] {text}",
                     "url":      href,
                     "source":   "NAIC LATF",
                     "date":     datetime.utcnow().strftime("%b %d, %Y"),
-                    "snippet":  f"Document published on the NAIC LATF page: {text}",
+                    "snippet":  f"Document on NAIC LATF page: {text}",
                     "category": "Regulatory",
                 })
-
         print(f"    NAIC LATF: {len(articles)} documents")
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
-
     return articles
 
-# ---------------------------------------------------------------------
-# RSS Parser — tolerant of malformed XML
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# RSS parser — tolerant of malformed XML
+# ------------------------------------------------------------------
 
 def parse_rss_feed(content, source_name=""):
     cutoff   = datetime.utcnow() - timedelta(days=config.DAYS_BACK)
     articles = []
 
-    # Try strict ET parse first
     try:
         root    = ET.fromstring(content)
         channel = root.find("channel")
@@ -111,16 +95,15 @@ def parse_rss_feed(content, source_name=""):
             else root.findall(".//item")
         )
     except ET.ParseError:
-        # Fallback: BeautifulSoup lxml-xml tolerates malformed feeds
         try:
             soup  = BeautifulSoup(content, "lxml-xml")
             items = soup.find_all("item")
             result = []
             for item in items[:config.MAX_ARTICLES_PER_QUERY]:
-                t = item.find("title")
-                l = item.find("link")
-                d = item.find("description")
-                p = item.find("pubDate")
+                t  = item.find("title")
+                l  = item.find("link")
+                d  = item.find("description")
+                p  = item.find("pubDate")
                 title    = t.get_text() if t else ""
                 link     = l.get_text() if l else ""
                 desc     = d.get_text() if d else ""
@@ -163,7 +146,6 @@ def parse_rss_feed(content, source_name=""):
             "date":    date_str,
             "snippet": re.sub(r"<[^>]+>", "", desc)[:400],
         })
-
     return articles
 
 
@@ -190,9 +172,9 @@ def fetch_google_news(query):
         print(f"    Google News error [{query[:50]}]: {e}")
         return []
 
-# ---------------------------------------------------------------------
-# Targeted HTML Scrapers
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# HTML scrapers
+# ------------------------------------------------------------------
 
 def _get_soup(url):
     resp = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
@@ -211,27 +193,23 @@ def _make_article(title, url, source, snippet=""):
 
 
 def _generic_scraper(url, source_name, path_keywords, base_url,
-                     min_words=5, min_chars=25, life_filter=True):
-    """
-    Reusable scraper for sites with standard anchor-tag article links.
-    path_keywords: list of strings that must appear in the href.
-    life_filter: if True, only keep links with life/annuity keywords in text.
-    """
-    articles = []
+                     min_words=4, min_chars=20, life_filter=True):
     life_kws = [
         "life", "annuity", "mortality", "reserve", "valuation",
         "actuari", "reinsurance", "fia", "rila", "iul", "myga",
         "ldti", "pbr", "vm-20", "vm-22", "capital", "alm",
+        "insurance", "pension", "retirement",
     ]
+    articles = []
     try:
         soup = _get_soup(url)
         seen = set()
         for a in soup.select("a[href]"):
             text = a.get_text(strip=True)
             href = a.get("href", "")
-            if (len(text) < min_chars
-                    or len(text.split()) < min_words
-                    or href in seen):
+            if len(text) < min_chars or len(text.split()) < min_words:
+                continue
+            if href in seen:
                 continue
             if path_keywords and not any(kw in href for kw in path_keywords):
                 continue
@@ -239,6 +217,11 @@ def _generic_scraper(url, source_name, path_keywords, base_url,
                 continue
             full = urljoin(base_url, href) if not href.startswith("http") else href
             if not full.startswith("http"):
+                continue
+            # Skip nav/utility links
+            if any(x in full.lower() for x in
+                   ["/author/", "/tag/", "/category/", "/login",
+                    "/subscribe", "/contact", "/about", "?s="]):
                 continue
             seen.add(href)
             articles.append(_make_article(text, full, source_name,
@@ -254,54 +237,45 @@ def _generic_scraper(url, source_name, path_keywords, base_url,
 def scrape_soa_research(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/research/", "/resources/", ".aspx"],
+        path_keywords=["/research/", "/resources/", "/pub/", "/studies/"],
         base_url="https://www.soa.org",
-        min_words=4, min_chars=20,
+        life_filter=False,  # All SOA content is relevant
     )
 
 
 def scrape_soa_news(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/news/", "/articles/"],
+        path_keywords=["/news/", "/publications/", "/newsletter/"],
         base_url="https://www.soa.org",
-        min_words=4, min_chars=20,
+        life_filter=False,
     )
 
 
 def scrape_naic_newsroom(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/article/", "/news/", "/press/", "/cipr/"],
+        path_keywords=["/article/", "/news/", "/press/", "/cipr/", "/media/"],
         base_url="https://content.naic.org",
-        min_words=4, min_chars=20,
-        life_filter=False,   # NAIC content is always relevant
+        life_filter=False,
     )
 
 
 def scrape_limra(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/newsroom/", "/research/", "/press/", "/en/"],
+        path_keywords=["/newsroom/", "/research/", "/press-releases/", "/en/"],
         base_url="https://www.limra.com",
-        min_words=4, min_chars=20,
+        min_words=3, min_chars=15,
     )
 
 
 def scrape_thinkadvisor(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/life-health/", "/annuity/", "/insurance/"],
+        path_keywords=["/life-health/", "/annuity/", "/insurance/",
+                       "/retirement-planning/", "/regulation-compliance/"],
         base_url="https://www.thinkadvisor.com",
-        min_words=5, min_chars=25,
-    )
-
-
-def scrape_insurancenewsnet(url, source_name):
-    return _generic_scraper(
-        url, source_name,
-        path_keywords=["/oarticle/", "/article/", "/news/"],
-        base_url="https://insurancenewsnet.com",
         min_words=5, min_chars=25,
     )
 
@@ -309,9 +283,38 @@ def scrape_insurancenewsnet(url, source_name):
 def scrape_milliman(url, source_name):
     return _generic_scraper(
         url, source_name,
-        path_keywords=["/insight/", "/research/", "/upload/"],
+        path_keywords=["/insight/", "/research/", "/article/", "/upload/",
+                       "/publications/"],
         base_url="https://www.milliman.com",
-        min_words=4, min_chars=20,
+        life_filter=False,  # Milliman content filtered by scoring
+    )
+
+
+def scrape_insurancenewsnet(url, source_name):
+    return _generic_scraper(
+        url, source_name,
+        path_keywords=["/oarticle/", "/article/", "/innarticle/"],
+        base_url="https://insurancenewsnet.com",
+        min_words=5, min_chars=25,
+    )
+
+
+def scrape_aaa_publications(url, source_name):
+    return _generic_scraper(
+        url, source_name,
+        path_keywords=["/content/", "/publications/", "/issues/",
+                       "/reports/", "/practice-notes/"],
+        base_url="https://www.actuary.org",
+        life_filter=False,
+    )
+
+
+def scrape_ambest_news(url, source_name):
+    return _generic_scraper(
+        url, source_name,
+        path_keywords=["/news/", "/article/", "/research/", "/bestweek/"],
+        base_url="https://www.ambest.com",
+        life_filter=False,  # AM Best content is inherently relevant
     )
 
 
@@ -321,8 +324,10 @@ SCRAPERS = {
     "naic_newsroom":    scrape_naic_newsroom,
     "limra_newsroom":   scrape_limra,
     "thinkadvisor":     scrape_thinkadvisor,
-    "insurancenewsnet": scrape_insurancenewsnet,
     "milliman":         scrape_milliman,
+    "insurancenewsnet": scrape_insurancenewsnet,
+    "aaa_publications": scrape_aaa_publications,
+    "ambest_news":      scrape_ambest_news,
 }
 
 
@@ -333,9 +338,9 @@ def fetch_html_source(url, source_name, scraper_id):
         return []
     return fn(url, source_name)
 
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
 # SEC EDGAR
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 LIFE_KEYWORDS = [
     "life insurance", "annuity", "reinsurance",
@@ -346,17 +351,15 @@ LIFE_KEYWORDS = [
 def fetch_edgar_filings():
     articles = []
     try:
-        headers = {"User-Agent": f"ActuarialIntelligence {config.GMAIL_USER}"}
-        resp    = requests.get(
+        resp = requests.get(
             "https://www.sec.gov/cgi-bin/browse-edgar"
             "?action=getcurrent&type=8-K&output=atom&count=100",
-            headers=headers, timeout=20,
+            headers={"User-Agent": f"ActuarialIntelligence {config.GMAIL_USER}"},
+            timeout=20,
         )
         resp.raise_for_status()
-
         root = ET.fromstring(resp.content)
         ns   = {"atom": "http://www.w3.org/2005/Atom"}
-
         for entry in root.findall("atom:entry", ns):
             title   = entry.findtext("atom:title",   "", ns)
             summary = entry.findtext("atom:summary", "", ns)
@@ -373,12 +376,11 @@ def fetch_edgar_filings():
             })
     except Exception as e:
         print(f"    EDGAR error: {e}")
-
     return articles
 
-# ---------------------------------------------------------------------
-# Collect All News
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Collect all news
+# ------------------------------------------------------------------
 
 def collect_news():
     raw          = []
@@ -400,7 +402,7 @@ def collect_news():
     for category, source, url in DIRECT_RSS_FEEDS:
         add(category, fetch_direct_rss(url, source), source)
 
-    print("  Targeted HTML scrapers...")
+    print("  HTML scrapers...")
     for category, source, url, scraper_id in HTML_SCRAPE_TARGETS:
         add(category, fetch_html_source(url, source, scraper_id), source)
 
@@ -415,14 +417,14 @@ def collect_news():
     dead  = [s for s, n in source_health.items() if n == 0]
     total = sum(source_health.values())
     if dead:
-        print(f"  ⚠ {len(dead)} dead sources: {', '.join(dead[:6])}")
-    print(f"  Total raw: {total} articles from {len(source_health)} sources")
+        print(f"  ⚠ {len(dead)} dead sources")
+    print(f"  Total raw: {total} from {len(source_health)} sources")
 
     return raw
 
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Deduplication
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 def deduplicate_articles(articles):
     seen   = set()
@@ -439,9 +441,9 @@ def deduplicate_articles(articles):
     print(f"  Deduplicated: {len(articles)} → {len(unique)}")
     return unique
 
-# ---------------------------------------------------------------------
-# Noise Filter
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Noise filter
+# ------------------------------------------------------------------
 
 def filter_noise(articles):
     filtered = []
@@ -450,34 +452,29 @@ def filter_noise(articles):
         "life insurance", "annuity", "actuari", "reserve", "valuation",
         "reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
         "mortality", "fia", "rila", "iul", "alm", "capital",
-        "hedging", "policyholder", "myga", "solvency",
+        "hedging", "policyholder", "myga", "solvency", "pension",
+        "retirement income",
     ]
-
     for a in articles:
         text = (a["title"] + " " + a.get("snippet", "")).lower()
-
         if any(phrase in text for phrase in NOISE_PHRASES):
             dropped += 1
             continue
-
         min_hits = SOURCE_MIN_SCORES.get(a.get("source", ""), 0)
         if min_hits > 0:
             if not any(kw in text for kw in life_kws):
                 dropped += 1
                 continue
-
         filtered.append(a)
-
     print(f"  Noise filter: dropped {dropped}, kept {len(filtered)}")
     return filtered
 
-# ---------------------------------------------------------------------
-# Score and Tag
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Score and tag
+# ------------------------------------------------------------------
 
 def score_and_tag(articles):
     category_buckets = {}
-
     for a in articles:
         text  = (a["title"] + " " + a.get("snippet", "")).lower()
         score = 0
@@ -497,8 +494,8 @@ def score_and_tag(articles):
 
         if a.get("source") in (
             "SOA Research Institute", "SOA News", "The Actuary Magazine",
-            "NAIC Newsroom", "LIMRA Newsroom",
-            "AM Best Ratings", "AM Best News", "Milliman Insights",
+            "American Academy of Actuaries", "NAIC Newsroom",
+            "LIMRA Newsroom", "AM Best News", "Milliman Insights",
         ):
             score += 5
 
@@ -512,7 +509,6 @@ def score_and_tag(articles):
             "MEDIUM" if score >= config.MEDIUM_IMPACT_THRESHOLD else
             "LOW"
         )
-
         cat = a.get("category", "Other")
         category_buckets.setdefault(cat, []).append(a)
 
@@ -521,15 +517,14 @@ def score_and_tag(articles):
 
     return category_buckets
 
-# ---------------------------------------------------------------------
-# Groq — Clean news summaries only, no consulting commentary
-# ---------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Groq summary
+# ------------------------------------------------------------------
 
 def summarize_with_groq(category_buckets, market_snapshot):
     client           = Groq(api_key=config.GROQ_API_KEY)
     market_narrative = generate_market_narrative(market_snapshot)
 
-    # Build article list — all scoring levels, best articles per category
     context_lines = []
     for cat, articles in category_buckets.items():
         top = [a for a in articles if a.get("score", 0) >= 5][:8]
@@ -538,9 +533,10 @@ def summarize_with_groq(category_buckets, market_snapshot):
         context_lines.append(f"\n[{cat}]")
         for a in top:
             tags_str = ", ".join(a.get("tags", []))
+            snippet  = a.get("snippet", "")[:200]
             context_lines.append(
-                f"- [{tags_str}] {a['title']} | {a['source']} | {a.get('date','')}"
-                + (f"\n  Snippet: {a['snippet'][:200]}" if a.get("snippet") else "")
+                f"- [{tags_str}] {a['title']} ({a['source']})"
+                + (f"\n  {snippet}" if snippet else "")
             )
 
     news_context = (
@@ -550,73 +546,65 @@ def summarize_with_groq(category_buckets, market_snapshot):
 
     prompt = f"""
 You are writing a daily intelligence briefing for life and annuity actuaries.
-This is a news digest, not a consulting document.
+This is a news digest — factual summaries only.
 
 RULES:
-- For each section, write 1-2 sentences per article summarizing what happened.
-- Be factual and concise. No opinions, no recommendations, no analysis of
-  implications unless they are explicitly stated in the source material.
-- Do NOT include phrases like "this matters because", "consultants should",
-  "this is significant", or any consulting framing.
+- Write 1-2 sentences per development summarizing what happened.
+- Factual only. No opinions, no recommendations, no consulting framing.
+- No phrases like "this matters because", "should consider", "it is important".
 - If a section has no relevant articles, write "No significant developments."
-- Do not invent or extrapolate details not present in the article titles/snippets.
-- Filter out anything unrelated to life insurance, annuities, reinsurance,
-  actuarial practice, or life/annuity investment management.
+- Filter out P&C, health, employee benefits, auto insurance, sports,
+  general consumer finance, and unrelated PR.
 
-MARKET DATA (for your Market Pulse section only):
+MARKET DATA:
 {market_narrative}
 
 ARTICLES:
 {news_context}
 
-Write the following sections using **Section Name** as the header.
+Write sections with **Section Name** as the header.
 
 **Market Pulse**
-2-3 sentences summarizing today's key rate and spread levels.
-State the numbers. No interpretation beyond what the numbers show.
+2-3 sentences on today's rate and spread levels. State the numbers plainly.
 
 **Valuation & Reserving**
-Articles related to VM-20, VM-22, PBR, asset adequacy, LDTI, actuarial guidelines.
+VM-20, VM-22, PBR, asset adequacy, LDTI, actuarial guidelines.
 
 **Regulatory Developments**
-NAIC, LATF, state departments, IRS/DOL guidance, actuarial guidelines.
-For LATF documents, state the document name and what it addresses.
+NAIC, LATF, state departments, IRS/DOL. For LATF documents, name the document.
 
 **Accounting & LDTI**
-ASC 944, FASB, LDTI implementation news.
+ASC 944, FASB, LDTI implementation.
 
 **Mortality & Experience Studies**
-SOA/AAA research, mortality studies, experience results, GLP-1/longevity news.
+SOA/AAA research, mortality, experience studies, GLP-1 implications.
 
 **Reinsurance Market**
-Transactions, treaty news, Bermuda activity, M&A involving reinsurers.
+Transactions, Bermuda, M&A involving reinsurers or life carriers.
 
 **Capital & Risk**
-RBC, rating agency actions, solvency news.
+RBC, rating agency actions on life/annuity carriers.
 
 **Annuity Market**
-FIA, RILA, MYGA sales, LIMRA data, product news, hedging cost news.
+FIA, RILA, MYGA sales data, product news, hedging developments.
 
 **Life Product Developments**
-IUL, term, whole life, AG 49, new product filings or launches.
+IUL, term, whole life pricing, filings, AG 49.
 
 **Investments & ALM**
-Private credit, structured assets, insurer investment portfolio news,
-duration and ALM-related developments.
+Private credit, structured assets, insurer investment and ALM news.
 
 **Industry Trends**
-AI in insurance, private equity activity, distribution trends, demographic
-shifts relevant to life/annuity.
+AI in insurance, PE consolidation, distribution shifts, longevity trends.
 
 **Carrier Intelligence**
-News specifically about named carriers. State what happened, one sentence each.
-Only include carriers that actually appear in the articles.
+Named carrier news only. One sentence per carrier. Omit carriers with no news.
 
 **SOA / AAA Research**
-New publications, reports, or research releases.
+New publications and research releases.
 
 **Consulting & Research**
-Reports or research from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
+Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 """
 
     try:
@@ -627,7 +615,6 @@ Reports or research from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
             max_tokens=3000,
         )
         return resp.choices[0].message.content
-
     except Exception as e:
         print(f"    Groq error: {e}")
         return "Briefing unavailable."
