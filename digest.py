@@ -3,11 +3,11 @@ from intelligence import (
     collect_news,
     deduplicate_articles,
     filter_noise,
-    score_and_tag, # Updated from score_articles
+    score_and_tag,
     summarize_with_groq
 )
 from email_template import build_email_html
-from market_data import get_market_snapshot
+from market_data import build_market_snapshot  # Corrected function name
 import email_sender
 
 def run_digest():
@@ -19,10 +19,11 @@ def run_digest():
     filtered = filter_noise(unique)
     
     # 2. Score and bucket
-    category_buckets = score_and_tag(filtered) # Use the correct function
+    category_buckets = score_and_tag(filtered)
     
     # 3. Market data and LLM Summary
-    market = get_market_snapshot()
+    # Updated to call the correctly named function
+    market = build_market_snapshot() 
     summary = summarize_with_groq(category_buckets, market)
     
     # 4. Generate and send
