@@ -19,6 +19,11 @@ from data_sources import (
 )
 from market_data import generate_market_narrative
 
+import os
+import json
+
+NAIC_CACHE_FILE = "naic_latf_cache.json"
+
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": "ActuarialIntelligence/1.0"
@@ -31,12 +36,33 @@ BROWSER_HEADERS = {
     "Connection": "keep-alive",
 }
 
+def load_naic_cache():
+    if not os.path.exists(NAIC_CACHE_FILE):
+        return set()
+    try:
+        with open(NAIC_CACHE_FILE, "r") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+        
+def save_naic_cache(cache_set):
+    try:
+        with open(NAIC_CACHE_FILE, "w") as f:
+            json.dump(list(cache_set), f)
+    except Exception as e:
+        print(f"NAIC cache save error: {e}")
+
 # ------------------------------------------------------------------
 # NAIC LATF scraper (Kept intact - specialized regulatory structure)
 # ------------------------------------------------------------------
 
 def fetch_naic_latf():
     articles = []
+
+    # LOAD PREVIOUSLY SEEN ITEMS
+    seen_cache = load_naic_cache()
+    new_seen = set(seen_cache)
+
     try:
         resp = requests.get(
             "https://content.naic.org/cmte_a_latf.htm",
@@ -50,64 +76,83 @@ def fetch_naic_latf():
             re.IGNORECASE | re.DOTALL,
         )
 
-        seen = set()
-
-        # keywords that indicate REAL documents (not navigation)
-        doc_keywords = [
-            "report", "faq", "study", "memo", "update",
-            "impact", "review", "pilot", "guideline",
-            "exposure", "analysis", "recommendation"
-        ]
-
-        # noise navigation terms
-        nav_noise = [
-            "committee", "working group", "subgroup",
-            "task force", "life insurance and annuities",
-            "latf", "valuation manual"
-        ]
-
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
 
-            if not text or len(text) < 8:
-                continue
+                        # -------------------------------------------------
+            # DROP NAVIGATION / WORKING GROUP STRUCTURE LINKS
+            # -------------------------------------------------
+            nav_noise = [
+                "committee",
+                "working group",
+                "subgroup",
+                "task force",
+                "materials",
+                "membership",
+                "agenda",
+                "minutes",
+                "reporting",
+                "online",
+                "access",
+                "view",
+                "forms",
+                "tools",
+            ]
 
-            if href in seen:
-                continue
-            seen.add(href)
+if any(x in text.lower() for x in nav_noise):
+    continue
 
             if href.startswith("/"):
                 href = "https://content.naic.org" + href
             elif not href.startswith("http"):
                 continue
 
-            title_l = text.lower()
-
-            # --- HARD FILTER 1: remove nav structure items ---
-            if any(n in title_l for n in nav_noise):
-                # allow only if it's clearly a document
-                if not any(k in title_l for k in doc_keywords):
-                    continue
-
-            # --- HARD FILTER 2: require document signal ---
-            if not any(k in title_l for k in doc_keywords):
+            if len(text) < 8:
                 continue
 
-            # --- FINAL CLEANUP FILTER ---
-            if any(ext in href.lower() for ext in [".jpg", ".png", ".gif"]):
+                        # only keep "document-like" items
+            doc_signals = [
+                "report",
+                "study",
+                "impact",
+                "faq",
+                "memo",
+                "analysis",
+                "guideline",
+                "proposal",
+                "update",
+                "exposure",
+                "draft",
+            ]
+            
+            if not any(k in text.lower() for k in doc_signals):
                 continue
+
+            # CREATE UNIQUE KEY
+            key = (text + "|" + href).lower().strip()
+
+            # 🚨 NEWNESS CHECK
+            if key in seen_cache:
+                continue
+
+            # mark as new
+            new_seen.add(key)
 
             articles.append({
                 "title": f"[NAIC LATF] {text}",
                 "url": href,
                 "source": "NAIC LATF",
                 "date": datetime.utcnow().strftime("%b %d, %Y"),
-                "snippet": f"NAIC LATF document: {text}",
+                "snippet": f"New NAIC LATF item: {text}",
                 "category": "Regulatory",
+                "is_new": True,
             })
 
-        print(f"    NAIC LATF: {len(articles)} documents")
+        # SAVE UPDATED CACHE
+        save_naic_cache(new_seen)
+
+        print(f"    NAIC LATF (NEW ONLY): {len(articles)}")
 
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
