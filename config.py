@@ -73,6 +73,8 @@ SOURCE_MIN_SCORES = {
     "SEC EDGAR": 0,
     "Google News": 0,
 }
+NAIC_TTL_DAYS = 90
+NAIC_MAX_ITEMS = 1500
 
 # ------------------------------------------------------------------
 # Scoring thresholds
