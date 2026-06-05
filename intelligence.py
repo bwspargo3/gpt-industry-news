@@ -79,52 +79,53 @@ def fetch_naic_latf():
 # NewsAPI Fetcher (The primary replacement for HTML scraping)
 # ------------------------------------------------------------------
 
-def fetch_newsapi(query, source_name="NewsAPI"):
+def fetch_newsapi_bulk(queries):
     if not config.NEWSAPI_KEY:
         return []
-    
-    articles = []
+
     from_date = (datetime.utcnow() - timedelta(days=config.DAYS_BACK)).strftime("%Y-%m-%d")
+
     url = "https://newsapi.org/v2/everything"
-    params = {
-        "q": query,
-        "language": "en",
-        "sortBy": "publishedAt",
-        "from": from_date,
-        "apiKey": config.NEWSAPI_KEY,
-        "pageSize": config.MAX_ARTICLES_PER_QUERY
-    }
-    
-    try:
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        if data.get("status") == "ok":
+
+    all_articles = []
+    seen = set()
+
+    for category, query in queries:
+        params = {
+            "q": query,
+            "language": "en",
+            "sortBy": "publishedAt",
+            "from": from_date,
+            "apiKey": config.NEWSAPI_KEY,
+            "pageSize": 25,
+        }
+
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
             for item in data.get("articles", []):
                 title = item.get("title", "")
                 url_link = item.get("url", "")
-                desc = item.get("description", "") or ""
-                source = item.get("source", {}).get("name", source_name)
-                pub_date = item.get("publishedAt", "")
-                
-                try:
-                    dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00")).replace(tzinfo=None)
-                    date_str = dt.strftime("%b %d, %Y")
-                except Exception:
-                    date_str = pub_date[:10]
-                    
-                articles.append({
+
+                key = title.lower().strip()
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                all_articles.append({
                     "title": title.strip(),
                     "url": url_link,
-                    "source": source,
-                    "date": date_str,
-                    "snippet": re.sub(r"<[^>]+>", "", desc)[:400],
+                    "source": item.get("source", {}).get("name", "NewsAPI"),
+                    "snippet": item.get("description", "")[:400],
+                    "category": category,
                 })
-    except Exception as e:
-        print(f"    NewsAPI error [{query[:30]}]: {e}")
-        
-    return articles
+
+        except Exception as e:
+            print(f"    NewsAPI error [{query[:40]}]: {e}")
+
+    return all_articles
 
 # ------------------------------------------------------------------
 # RSS parser
@@ -280,9 +281,9 @@ def collect_news():
     for category, source, url in DIRECT_RSS_FEEDS:
         add(category, fetch_direct_rss(url, source), source)
 
-    print("  NewsAPI...")
-    for category, query in NEWSAPI_QUERIES:
-        add(category, fetch_newsapi(query), f"NewsAPI:{query[:40]}")
+    print("  NewsAPI (bulk)...")
+newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
+add("NewsAPI", newsapi_articles, "NewsAPI")
 
     print("  Google News (industry)...")
     for category, query in SEARCH_QUERIES:
