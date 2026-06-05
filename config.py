@@ -15,11 +15,18 @@ def env(name, default=None, required=False):
 
 GROQ_API_KEY = env("GROQ_API_KEY", required=True)
 
-# Support both naming conventions
+# ------------------------------------------------------------------
+# NewsAPI Key (ROBUST FIX)
+# ------------------------------------------------------------------
+
 NEWSAPI_KEY = (
     env("NEWSAPI_KEY")
     or env("NEWS_API_KEY")
+    or env("NEWS_API")
 )
+
+if not NEWSAPI_KEY:
+    print("⚠️ WARNING: NEWSAPI_KEY is not set. NewsAPI will be disabled.")
 
 GMAIL_USER = env("GMAIL_USER", required=True)
 GMAIL_PASS = env("GMAIL_APP_PASSWORD", required=True)
