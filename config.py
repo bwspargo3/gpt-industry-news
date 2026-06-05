@@ -4,19 +4,18 @@ from datetime import datetime
 # -----------------------------------------------------------------------------
 # Environment Variables
 # -----------------------------------------------------------------------------
-GROQ_API_KEY        = os.environ["GROQ_API_KEY"]
-GMAIL_USER          = os.environ["GMAIL_USER"]
-GMAIL_APP_PASSWORD  = os.environ["GMAIL_APP_PASSWORD"]
-
-RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
+GROQ_API_KEY       = os.environ["GROQ_API_KEY"]
+GMAIL_USER         = os.environ["GMAIL_USER"]
+GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
+RECIPIENT_EMAIL    = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
 
 # -----------------------------------------------------------------------------
 # Runtime Settings
 # -----------------------------------------------------------------------------
 IS_FRIDAY = datetime.utcnow().weekday() == 4
 
-DAYS_BACK               = 7 if IS_FRIDAY else 3
-MAX_ARTICLES_PER_QUERY  = 10
+DAYS_BACK                = 7 if IS_FRIDAY else 3
+MAX_ARTICLES_PER_QUERY   = 10
 MAX_ARTICLES_PER_SECTION = 15
 
 # -----------------------------------------------------------------------------
@@ -30,13 +29,13 @@ TREASURY_SERIES = {
 }
 
 # -----------------------------------------------------------------------------
-# Additional FRED Series for Credit Spreads and Inflation
+# Additional FRED Series
 # -----------------------------------------------------------------------------
 FRED_ADDITIONAL = {
-    "IG_OAS":       "BAMLC0A0CM",    # ICE BofA US Corporate Index Option-Adjusted Spread
-    "HY_OAS":       "BAMLH0A0HYM2",  # ICE BofA High Yield Spread
+    "IG_OAS":        "BAMLC0A0CM",   # ICE BofA IG Corporate OAS
+    "HY_OAS":        "BAMLH0A0HYM2", # ICE BofA High Yield OAS
     "BREAKEVEN_10Y": "T10YIE",        # 10Y inflation breakeven
-    "VIX":          "VIXCLS",         # CBOE Volatility Index (Equity Vol / FIA proxy)
+    "VIX":           "VIXCLS",        # CBOE VIX
 }
 
 # -----------------------------------------------------------------------------
@@ -108,8 +107,8 @@ FUNCTION_TAGS = {
     "fiduciary":                 ["REGULATORY"],
     "irs":                       ["REGULATORY"],
     "internal revenue":          ["REGULATORY"],
-    
-    # Consulting Mentions
+
+    # Consulting firms
     "milliman":                  ["VALUATION", "EXPERIENCE"],
     "oliver wyman":              ["CAPITAL", "ALM"],
     "deloitte":                  ["ACCOUNTING", "REGULATORY"],
@@ -118,13 +117,20 @@ FUNCTION_TAGS = {
     "kpmg":                      ["REGULATORY"],
     "willis towers":             ["ALM", "EXPERIENCE"],
     "wtw":                       ["ALM", "EXPERIENCE"],
-    "consulting":                ["GENERAL"],
+
+    # Trends
+    "artificial intelligence":   ["GENERAL"],
+    "machine learning":          ["GENERAL"],
+    "glp-1":                     ["EXPERIENCE"],
+    "ozempic":                   ["EXPERIENCE"],
+    "private equity":            ["REINSURANCE", "CAPITAL"],
 }
 
 # -----------------------------------------------------------------------------
-# Relevance Scoring Keywords (Highest weight given to core industry items)
+# Relevance Scoring Keywords
 # -----------------------------------------------------------------------------
 ACTUARIAL_KEYWORDS = {
+    # Core actuarial — highest weight
     "vm-20": 15, "vm20": 15,
     "vm-22": 15, "vm22": 15,
     "latf": 12, "life actuarial task force": 12,
@@ -142,8 +148,16 @@ ACTUARIAL_KEYWORDS = {
     "solvency": 7,
     "fiduciary": 6,
     "actuarial": 4, "actuary": 4,
-    
-    # Consulting Firm Scoring Boosts
+
+    # Emerging trends
+    "artificial intelligence": 5,
+    "machine learning": 5,
+    "glp-1": 7, "ozempic": 7,
+    "private equity": 5,
+    "insurtech": 5,
+    "acquisition": 4, "merger": 4,
+
+    # Consulting firms
     "milliman": 8,
     "oliver wyman": 8,
     "deloitte insurance": 6,
@@ -153,11 +167,11 @@ ACTUARIAL_KEYWORDS = {
     "wtw": 6,
     "willis towers watson": 6,
 
-    # Watchlist Carrier Framework
+    # Watchlist carriers
     "kansas city life": 10,
     "ameritas": 10,
     "securian": 10,
-    "country financial": 6,        
+    "country financial": 6,
     "business men's assurance": 10,
     "bmi": 4,
     "midland national": 10,
@@ -174,14 +188,16 @@ ACTUARIAL_KEYWORDS = {
     "sammons": 10,
     "mutual of omaha": 8,
     "aig life": 10,
+    "26north": 10,
+    "independent life": 8,
 
-    # Corporate References
+    # Firm
     "actuarial resources": 15,
     "springline": 12,
 }
 
 # -----------------------------------------------------------------------------
-# Noise Filter — Dropped to exclude false positives from wider searches
+# Noise Phrases — articles containing these are dropped entirely
 # -----------------------------------------------------------------------------
 NOISE_PHRASES = [
     "police dog",
@@ -213,8 +229,7 @@ NOISE_PHRASES = [
     "homeowners",
     "flood insurance",
     "earthquake",
-    
-    # Federal Register Specific Filters
+    # Federal Register false positives
     "anadromous fish",
     "endangered species",
     "migratory bird",
@@ -244,15 +259,13 @@ LOW_IMPACT_ALLOWED_TAGS = [
     "CARRIER", "VALUATION", "REGULATORY",
     "REINSURANCE", "CAPITAL", "EXPERIENCE",
 ]
-
 LOW_IMPACT_MIN_SCORE = 5
 
-# Source-Specific Minimum Entry Hurdles
+# Source-specific minimum score hurdles
 SOURCE_MIN_SCORES = {
-    "Federal Register (IRS Life)":  8,
-    "Federal Register (DOL)":       8,
-    "Insurance Journal":            5,
-    "Google News":                  6,
+    "Federal Register (IRS Life)": 8,
+    "Insurance Journal":           5,
+    "Google News":                 4,
 }
 
 # -----------------------------------------------------------------------------
