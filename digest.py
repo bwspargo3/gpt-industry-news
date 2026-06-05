@@ -1,3 +1,7 @@
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 import config
 from intelligence import (
     collect_news,
@@ -8,13 +12,27 @@ from intelligence import (
 )
 from email_template import build_email_html
 from market_data import build_market_snapshot
-import email_sender
 
 
-def run_digest():
-    print("\n=== Life & Annuity Actuarial Intelligence — ARC | Springline ===\n")
+def send_email(html_body):
+    msg            = MIMEMultipart("alternative")
+    msg["Subject"] = "Life & Annuity Actuarial Intelligence"
+    msg["From"]    = config.GMAIL_USER
+    msg["To"]      = config.RECIPIENT_EMAIL
+    msg.attach(MIMEText(html_body, "html"))
 
-    print("[1] Building market snapshot...")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(config.GMAIL_USER, config.GMAIL_APP_PASSWORD)
+        server.sendmail(
+            config.GMAIL_USER, config.RECIPIENT_EMAIL, msg.as_string()
+        )
+    print("    Email sent.")
+
+
+def main():
+    print("\n=== Life & Annuity Actuarial Intelligence ===\n")
+
+    print("[1] Market data...")
     market = build_market_snapshot()
 
     print("[2] Collecting news...")
@@ -27,21 +45,21 @@ def run_digest():
     filtered = filter_noise(unique)
 
     print("[5] Scoring and tagging...")
-    category_buckets = score_and_tag(filtered)
-    total = sum(len(v) for v in category_buckets.values())
-    print(f"  {total} articles across {len(category_buckets)} categories")
+    buckets = score_and_tag(filtered)
+    total   = sum(len(v) for v in buckets.values())
+    print(f"    {total} articles across {len(buckets)} categories")
 
-    print("[6] Generating executive briefing...")
-    summary = summarize_with_groq(category_buckets, market)
+    print("[6] Generating briefing...")
+    summary = summarize_with_groq(buckets, market)
 
     print("[7] Building email...")
-    html = build_email_html(market, category_buckets, summary)
+    html = build_email_html(market, buckets, summary)
 
-    print("[8] Sending email...")
-    email_sender.send_email(html)
+    print("[8] Sending...")
+    send_email(html)
 
-    print("\n✓ Complete\n")
+    print("\n✓ Done\n")
 
 
 if __name__ == "__main__":
-    run_digest()
+    main()
