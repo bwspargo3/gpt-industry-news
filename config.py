@@ -4,7 +4,6 @@ from datetime import datetime
 # -----------------------------------------------------------------------------
 # Environment Variables
 # -----------------------------------------------------------------------------
-
 GROQ_API_KEY        = os.environ["GROQ_API_KEY"]
 GMAIL_USER          = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD  = os.environ["GMAIL_APP_PASSWORD"]
@@ -14,17 +13,15 @@ RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
 # -----------------------------------------------------------------------------
 # Runtime Settings
 # -----------------------------------------------------------------------------
-
 IS_FRIDAY = datetime.utcnow().weekday() == 4
 
-DAYS_BACK               = 7 if IS_FRIDAY else 30
+DAYS_BACK               = 7 if IS_FRIDAY else 3
 MAX_ARTICLES_PER_QUERY  = 10
 MAX_ARTICLES_PER_SECTION = 15
 
 # -----------------------------------------------------------------------------
 # Treasury Monitoring
 # -----------------------------------------------------------------------------
-
 TREASURY_SERIES = {
     "2Y":  "DGS2",
     "5Y":  "DGS5",
@@ -33,22 +30,19 @@ TREASURY_SERIES = {
 }
 
 # -----------------------------------------------------------------------------
-# Additional FRED Series for credit spreads and inflation
+# Additional FRED Series for Credit Spreads and Inflation
 # -----------------------------------------------------------------------------
-
 FRED_ADDITIONAL = {
-    "IG_OAS":       "BAMLC0A0CM",    # Investment grade credit spread
-    "HY_OAS":       "BAMLH0A0HYM2",  # High yield credit spread
+    "IG_OAS":       "BAMLC0A0CM",    # ICE BofA US Corporate Index Option-Adjusted Spread
+    "HY_OAS":       "BAMLH0A0HYM2",  # ICE BofA High Yield Spread
     "BREAKEVEN_10Y": "T10YIE",        # 10Y inflation breakeven
-    "VIX":          "VIXCLS",         # VIX (equity vol / FIA hedging proxy)
+    "VIX":          "VIXCLS",         # CBOE Volatility Index (Equity Vol / FIA proxy)
 }
 
 # -----------------------------------------------------------------------------
 # Actuarial Function Tags
 # -----------------------------------------------------------------------------
-
 FUNCTION_TAGS = {
-
     "vm-20":                     ["VALUATION"],
     "vm20":                      ["VALUATION"],
     "vm-22":                     ["VALUATION"],
@@ -114,25 +108,23 @@ FUNCTION_TAGS = {
     "fiduciary":                 ["REGULATORY"],
     "irs":                       ["REGULATORY"],
     "internal revenue":          ["REGULATORY"],
-        "milliman":          ["VALUATION", "EXPERIENCE"],
-    "oliver wyman":      ["CAPITAL", "ALM"],
-    "deloitte":          ["ACCOUNTING", "REGULATORY"],
-    "ernst & young":     ["ACCOUNTING", "REGULATORY"],
-    "pwc":               ["ACCOUNTING", "REGULATORY"],
-    "kpmg":              ["REGULATORY"],
-    "willis towers":     ["ALM", "EXPERIENCE"],
-    "wtw":               ["ALM", "EXPERIENCE"],
-    "consulting":        ["GENERAL"],
-
+    
+    # Consulting Mentions
+    "milliman":                  ["VALUATION", "EXPERIENCE"],
+    "oliver wyman":              ["CAPITAL", "ALM"],
+    "deloitte":                  ["ACCOUNTING", "REGULATORY"],
+    "ernst & young":             ["ACCOUNTING", "REGULATORY"],
+    "pwc":                       ["ACCOUNTING", "REGULATORY"],
+    "kpmg":                      ["REGULATORY"],
+    "willis towers":             ["ALM", "EXPERIENCE"],
+    "wtw":                       ["ALM", "EXPERIENCE"],
+    "consulting":                ["GENERAL"],
 }
 
 # -----------------------------------------------------------------------------
-# Relevance Scoring Keywords
+# Relevance Scoring Keywords (Highest weight given to core industry items)
 # -----------------------------------------------------------------------------
-
 ACTUARIAL_KEYWORDS = {
-
-    # Core actuarial — highest weight
     "vm-20": 15, "vm20": 15,
     "vm-22": 15, "vm22": 15,
     "latf": 12, "life actuarial task force": 12,
@@ -151,7 +143,7 @@ ACTUARIAL_KEYWORDS = {
     "fiduciary": 6,
     "actuarial": 4, "actuary": 4,
     
-    # Consulting firms — boost relevance when they publish life/annuity content
+    # Consulting Firm Scoring Boosts
     "milliman": 8,
     "oliver wyman": 8,
     "deloitte insurance": 6,
@@ -161,17 +153,17 @@ ACTUARIAL_KEYWORDS = {
     "wtw": 6,
     "willis towers watson": 6,
 
-    # Watchlist carriers — boost relevance
+    # Watchlist Carrier Framework
     "kansas city life": 10,
     "ameritas": 10,
     "securian": 10,
-    "country financial": 6,          # lowered — broad term
+    "country financial": 6,        
     "business men's assurance": 10,
-    "bmi": 4,                         # lowered — too generic alone
+    "bmi": 4,
     "midland national": 10,
     "north american company": 8,
     "pacific life": 10,
-    "equitable": 6,                   # lowered — broad term
+    "equitable": 6,
     "brighthouse": 10,
     "cno financial": 10,
     "bankers life": 8,
@@ -183,16 +175,14 @@ ACTUARIAL_KEYWORDS = {
     "mutual of omaha": 8,
     "aig life": 10,
 
-    # Firm
+    # Corporate References
     "actuarial resources": 15,
     "springline": 12,
 }
 
 # -----------------------------------------------------------------------------
-# Noise Filter — articles containing these phrases are dropped entirely
-# regardless of score. Catches false positives from broad carrier queries.
+# Noise Filter — Dropped to exclude false positives from wider searches
 # -----------------------------------------------------------------------------
-
 NOISE_PHRASES = [
     "police dog",
     "kyle busch",
@@ -207,7 +197,7 @@ NOISE_PHRASES = [
     "crypto etf",
     "lie detector",
     "venture funding",
-    "medicaid mandates",        # health, not life
+    "medicaid mandates",
     "south koreans' annual",
     "poland aims",
     "nami statement",
@@ -215,7 +205,7 @@ NOISE_PHRASES = [
     "real estate",
     "stream realty",
     "surety",
-    "auto insurance rate",      # P&C, not life
+    "auto insurance rate",
     "auto rates",
     "hurricane season",
     "workers compensation",
@@ -223,7 +213,8 @@ NOISE_PHRASES = [
     "homeowners",
     "flood insurance",
     "earthquake",
-        # Federal Register false positives
+    
+    # Federal Register Specific Filters
     "anadromous fish",
     "endangered species",
     "migratory bird",
@@ -246,19 +237,17 @@ NOISE_PHRASES = [
 # -----------------------------------------------------------------------------
 # Impact Thresholds
 # -----------------------------------------------------------------------------
-
 HIGH_IMPACT_THRESHOLD   = 12
 MEDIUM_IMPACT_THRESHOLD =  7
 
-# LOW impact articles are only shown if they have one of these tags
 LOW_IMPACT_ALLOWED_TAGS = [
     "CARRIER", "VALUATION", "REGULATORY",
     "REINSURANCE", "CAPITAL", "EXPERIENCE",
 ]
 
-# Minimum score for a LOW impact article to appear in the email
 LOW_IMPACT_MIN_SCORE = 5
-# Minimum scores by source — sources prone to noise need a higher bar
+
+# Source-Specific Minimum Entry Hurdles
 SOURCE_MIN_SCORES = {
     "Federal Register (IRS Life)":  8,
     "Federal Register (DOL)":       8,
@@ -266,11 +255,9 @@ SOURCE_MIN_SCORES = {
     "Google News":                  6,
 }
 
-
 # -----------------------------------------------------------------------------
 # Persistent Watch List
 # -----------------------------------------------------------------------------
-
 WATCH_LIST = [
     "VM-20", "VM-22", "Principle-Based Reserving", "LDTI",
     "Asset Adequacy Testing", "Cash Flow Testing",
