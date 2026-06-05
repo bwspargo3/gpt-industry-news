@@ -19,6 +19,11 @@ from data_sources import (
 )
 from market_data import generate_market_narrative
 
+SESSION = requests.Session()
+SESSION.headers.update({
+    "User-Agent": "ActuarialIntelligence/1.0"
+})
+
 BROWSER_HEADERS = {
     "User-Agent": "ActuarialIntelligence/1.0",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -33,7 +38,7 @@ BROWSER_HEADERS = {
 def fetch_naic_latf():
     articles = []
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://content.naic.org/cmte_a_latf.htm",
             headers=BROWSER_HEADERS, timeout=20,
         )
@@ -79,18 +84,26 @@ def fetch_naic_latf():
 # NewsAPI Fetcher (The primary replacement for HTML scraping)
 # ------------------------------------------------------------------
 
+from collections import defaultdict
+
 def fetch_newsapi_bulk(queries):
     if not config.NEWSAPI_KEY:
         return []
 
-    from_date = (datetime.utcnow() - timedelta(days=config.DAYS_BACK)).strftime("%Y-%m-%d")
+    from_date = (
+        datetime.utcnow() - timedelta(days=config.DAYS_BACK)
+    ).strftime("%Y-%m-%d")
 
     url = "https://newsapi.org/v2/everything"
+
+    query_map = defaultdict(list)
+    for category, query in queries:
+        query_map[query].append(category)
 
     all_articles = []
     seen = set()
 
-    for category, query in queries:
+    for query, categories in query_map.items():
         params = {
             "q": query,
             "language": "en",
@@ -101,26 +114,33 @@ def fetch_newsapi_bulk(queries):
         }
 
         try:
-            resp = requests.get(url, params=params, timeout=15)
+            resp = SESSION.get(url, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
 
             for item in data.get("articles", []):
-                title = item.get("title", "")
-                url_link = item.get("url", "")
+                title = (item.get("title") or "").strip()
+                url_link = item.get("url") or ""
 
-                key = title.lower().strip()
+                if not title:
+                    continue
+
+                # stronger dedupe key (title + url)
+                key = re.sub(r"[^a-zA-Z0-9]", "", (title + url_link).lower())[:120]
                 if key in seen:
                     continue
                 seen.add(key)
 
-                all_articles.append({
-                    "title": title.strip(),
-                    "url": url_link,
-                    "source": item.get("source", {}).get("name", "NewsAPI"),
-                    "snippet": item.get("description", "")[:400],
-                    "category": category,
-                })
+                snippet = (item.get("description") or "")[:400]
+
+                for cat in categories:
+                    all_articles.append({
+                        "title": title,
+                        "url": url_link,
+                        "source": item.get("source", {}).get("name", "NewsAPI"),
+                        "snippet": snippet,
+                        "category": cat,
+                    })
 
         except Exception as e:
             print(f"    NewsAPI error [{query[:40]}]: {e}")
@@ -198,7 +218,7 @@ def parse_rss_feed(content, source_name=""):
 
 def fetch_direct_rss(url, source_name):
     try:
-        resp = requests.get(url, headers=BROWSER_HEADERS, timeout=15)
+        resp = SESSION.get(url, headers=BROWSER_HEADERS, timeout=15)
         resp.raise_for_status()
         return parse_rss_feed(resp.content, source_name)
     except Exception as e:
@@ -211,7 +231,7 @@ def fetch_google_news(query):
         f"q={quote_plus(query)}&hl=en-US&gl=US&ceid=US:en"
     )
     try:
-        resp = requests.get(url, timeout=15)
+        resp = SESSION.get(url, timeout=15)
         resp.raise_for_status()
         return parse_rss_feed(resp.content, "Google News")
     except Exception as e:
@@ -230,7 +250,7 @@ LIFE_KEYWORDS = [
 def fetch_edgar_filings():
     articles = []
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://www.sec.gov/cgi-bin/browse-edgar"
             "?action=getcurrent&type=8-K&output=atom&count=100",
             headers={"User-Agent": f"ActuarialIntelligence {config.GMAIL_USER}"},
@@ -283,7 +303,11 @@ def collect_news():
 
     print("  NewsAPI (bulk)...")
     newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
-    add("NewsAPI", newsapi_articles, "NewsAPI")
+
+# IMPORTANT: avoid double-layer category corruption
+    for a in newsapi_articles:
+        a.setdefault("category", "NewsAPI")
+        raw.append(a)
 
     print("  Google News (industry)...")
     for category, query in SEARCH_QUERIES:
@@ -306,17 +330,22 @@ def collect_news():
 # ------------------------------------------------------------------
 
 def deduplicate_articles(articles):
-    seen   = set()
+    seen = set()
     unique = []
+
     for a in articles:
-        key = re.sub(r"[^a-zA-Z0-9]", "", a["title"].lower())[:80]
-        url = a.get("url", "")
-        if key in seen or (url and url in seen):
+        title = (a.get("title") or "").lower()
+        url = (a.get("url") or "").lower()
+
+        # stronger cross-source dedupe key
+        key = re.sub(r"[^a-z0-9]", "", title + url)[:140]
+
+        if not key or key in seen:
             continue
+
         seen.add(key)
-        if url:
-            seen.add(url)
         unique.append(a)
+
     print(f"  Deduplicated: {len(articles)} → {len(unique)}")
     return unique
 
@@ -505,7 +534,7 @@ Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 # ------------------------------------------------------------------
 
 def _get_soup(url):
-    resp = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
+    resp = SESSION.get(url, headers=BROWSER_HEADERS, timeout=20)
     resp.raise_for_status()
     return BeautifulSoup(resp.text, "lxml")
 
