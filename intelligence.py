@@ -404,10 +404,12 @@ def summarize_with_groq(category_buckets, market_snapshot):
         for a in top:
             tags_str = ", ".join(a.get("tags", []))
             snippet  = a.get("snippet", "")[:200]
+            source   = a.get("source", "Unknown")
             context_lines.append(
-                f"- [{tags_str}] {a['title']} ({a.get("source", "Unknown")})"
+                f"- [{tags_str}] {a['title']} ({source})"
                 + (f"\n  {snippet}" if snippet else "")
-            )
+        )
+
 
     news_context = (
         "\n".join(context_lines) if context_lines
