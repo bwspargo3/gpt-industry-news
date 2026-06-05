@@ -38,46 +38,80 @@ BROWSER_HEADERS = {
 def fetch_naic_latf():
     articles = []
     try:
-        resp = SESSION.get(
+        resp = requests.get(
             "https://content.naic.org/cmte_a_latf.htm",
-            headers=BROWSER_HEADERS, timeout=20,
+            headers=BROWSER_HEADERS,
+            timeout=20,
         )
         resp.raise_for_status()
-        pattern   = re.compile(
+
+        pattern = re.compile(
             r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
             re.IGNORECASE | re.DOTALL,
         )
+
         seen = set()
+
+        # keywords that indicate REAL documents (not navigation)
+        doc_keywords = [
+            "report", "faq", "study", "memo", "update",
+            "impact", "review", "pilot", "guideline",
+            "exposure", "analysis", "recommendation"
+        ]
+
+        # noise navigation terms
+        nav_noise = [
+            "committee", "working group", "subgroup",
+            "task force", "life insurance and annuities",
+            "latf", "valuation manual"
+        ]
+
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
-            if not any(ext in href.lower() for ext in
-                       [".pdf", ".docx", ".doc", ".htm", ".html"]):
+
+            if not text or len(text) < 8:
                 continue
-            if len(text) < 10 or href in seen:
+
+            if href in seen:
                 continue
             seen.add(href)
+
             if href.startswith("/"):
                 href = "https://content.naic.org" + href
             elif not href.startswith("http"):
                 continue
-            if any(kw in text.lower() for kw in [
-                "exposure draft", "draft", "proposed", "agenda",
-                "minutes", "adopted", "model", "actuarial guideline",
-                "vm-", "pbr", "reserve", "annuity", "life",
-                "latf", "task force",
-            ]):
-                articles.append({
-                    "title":    f"[NAIC LATF] {text}",
-                    "url":      href,
-                    "source":   "NAIC LATF",
-                    "date":     datetime.utcnow().strftime("%b %d, %Y"),
-                    "snippet":  f"Document on NAIC LATF page: {text}",
-                    "category": "Regulatory",
-                })
+
+            title_l = text.lower()
+
+            # --- HARD FILTER 1: remove nav structure items ---
+            if any(n in title_l for n in nav_noise):
+                # allow only if it's clearly a document
+                if not any(k in title_l for k in doc_keywords):
+                    continue
+
+            # --- HARD FILTER 2: require document signal ---
+            if not any(k in title_l for k in doc_keywords):
+                continue
+
+            # --- FINAL CLEANUP FILTER ---
+            if any(ext in href.lower() for ext in [".jpg", ".png", ".gif"]):
+                continue
+
+            articles.append({
+                "title": f"[NAIC LATF] {text}",
+                "url": href,
+                "source": "NAIC LATF",
+                "date": datetime.utcnow().strftime("%b %d, %Y"),
+                "snippet": f"NAIC LATF document: {text}",
+                "category": "Regulatory",
+            })
+
         print(f"    NAIC LATF: {len(articles)} documents")
+
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
+
     return articles
 
 # ------------------------------------------------------------------
@@ -397,8 +431,14 @@ def score_and_tag(articles):
                 tags.update(assigned_tags)
 
         if a.get("source") == "NAIC LATF":
-            score += 20
-            tags.update(["REGULATORY", "VALUATION"])
+    # only boost if it's actually a document-like item
+            if any(k in (a["title"] + a.get("snippet", "")).lower()
+                   for k in ["report", "faq", "study", "memo", "update", "impact"]):
+                score += 20
+                tags.update(["REGULATORY", "VALUATION"])
+            else:
+                score += 5
+                tags.add("REGULATORY")
 
         if a.get("source") in (
             "SOA Research Institute", "SOA News", "The Actuary Magazine",
