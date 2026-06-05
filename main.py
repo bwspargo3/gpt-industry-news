@@ -1,7 +1,7 @@
 import asyncio
 
 from ingest import ingest_all
-from scoring import score_articles
+from intelligence import score_and_tag
 from dedupe import dedupe_semantic
 from llm import summarize
 from emailer import send_email
@@ -21,7 +21,8 @@ async def main():
     articles = await ingest_all(SOURCES)
 
     print("Scoring...")
-    articles = score_articles(articles)
+    bucketed = score_and_tag(articles)
+    articles = [a for v in bucketed.values() for a in v]
 
     print("Deduping (semantic)...")
     articles = dedupe_semantic(articles)
