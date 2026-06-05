@@ -18,13 +18,13 @@ def send_email(html_body):
     msg            = MIMEMultipart("alternative")
     msg["Subject"] = "Life & Annuity Actuarial Intelligence"
     msg["From"]    = config.GMAIL_USER
-    msg["To"]      = config.RECIPIENT_EMAIL
+    msg["To"]      = config.TO_EMAIL
     msg.attach(MIMEText(html_body, "html"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(config.GMAIL_USER, config.GMAIL_APP_PASSWORD)
+        server.login(config.GMAIL_USER, config.GMAIL_PASS)
         server.sendmail(
-            config.GMAIL_USER, config.RECIPIENT_EMAIL, msg.as_string()
+            config.GMAIL_USER, config.TO_EMAIL, msg.as_string()
         )
     print("    Email sent.")
 
