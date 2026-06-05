@@ -79,25 +79,63 @@ def fetch_naic_latf():
             re.IGNORECASE | re.DOTALL,
         )
 
-        nav_noise = [
+        # -----------------------------
+        # STRONG NOISE DEFINITIONS
+        # -----------------------------
+        hard_noise = [
             "committee", "working group", "subgroup", "task force",
-            "materials", "membership", "agenda", "minutes",
-            "reporting", "online", "access", "view", "forms",
-            "tools"
+            "minutes", "agenda", "membership", "materials",
+            "view", "access", "forms", "tools", "reporting",
+            "online", "home", "index", "about"
         ]
 
-        doc_signals = [
-            "report", "study", "impact", "faq", "memo",
-            "analysis", "guideline", "proposal", "update",
-            "exposure", "draft"
+        # -----------------------------
+        # DOCUMENT QUALITY SIGNALS
+        # -----------------------------
+        doc_boost = [
+            "report", "study", "impact", "analysis", "faq",
+            "memo", "guideline", "update", "draft", "exposure",
+            "proposal", "model", "framework"
         ]
+
+        high_value_topics = [
+            "vm-20", "vm20", "vm-21", "vm-22",
+            "pbr", "principle-based", "rbc",
+            "longevity", "mortality", "hedging",
+            "economic scenario", "goes"
+        ]
+
+        def score_item(text: str, href: str) -> int:
+            t = text.lower()
+            h = href.lower()
+
+            score = 0
+
+            # kill obvious nav pages
+            if any(x in t for x in hard_noise):
+                return -999
+
+            # doc type signals
+            score += sum(3 for x in doc_boost if x in t)
+
+            # actuarial relevance boost
+            score += sum(4 for x in high_value_topics if x in t)
+
+            # file-type preference
+            if any(ext in h for ext in [".pdf", ".doc", ".docx"]):
+                score += 5
+
+            # penalize generic pages
+            if len(t.split()) < 4:
+                score -= 2
+
+            return score
 
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
 
-            # skip navigation noise
-            if any(x in text.lower() for x in nav_noise):
+            if len(text) < 8:
                 continue
 
             if href.startswith("/"):
@@ -105,11 +143,10 @@ def fetch_naic_latf():
             elif not href.startswith("http"):
                 continue
 
-            if len(text) < 8:
-                continue
+            score = score_item(text, href)
 
-            # keep only document-like items
-            if not any(k in text.lower() for k in doc_signals):
+            # reject low quality
+            if score < 3:
                 continue
 
             key = (text + "|" + href).lower().strip()
@@ -124,24 +161,23 @@ def fetch_naic_latf():
                 "url": href,
                 "source": "NAIC LATF",
                 "date": datetime.utcnow().strftime("%b %d, %Y"),
-                "snippet": f"New NAIC LATF item: {text}",
+                "snippet": f"NAIC LATF document (score={score}): {text}",
                 "category": "Regulatory",
                 "is_new": True,
+                "score": score
             })
 
         save_naic_cache(new_seen)
 
-        print(f"    NAIC LATF (NEW ONLY): {len(articles)}")
+        # sort best first
+        articles.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+        print(f"    NAIC LATF (FILTERED + SCORED): {len(articles)}")
 
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
 
     return articles
-
-# ------------------------------------------------------------------
-# EVERYTHING BELOW UNCHANGED (your pipeline is fine)
-# ------------------------------------------------------------------
-
 # ------------------------------------------------------------------
 # NewsAPI Fetcher (The primary replacement for HTML scraping)
 # ------------------------------------------------------------------
