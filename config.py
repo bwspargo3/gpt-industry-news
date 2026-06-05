@@ -21,3 +21,24 @@ DB_PATH = "digest.db"
 MAX_ARTICLES = 500
 EMBED_BATCH_SIZE = 20
 SIMILARITY_THRESHOLD = 0.88
+
+# ----------------------------
+# Intelligence / scoring config
+# ----------------------------
+
+NOISE_PHRASES = [
+    "press release",
+    "sponsored",
+    "advertisement",
+    "subscribe",
+    "sign up",
+    "newsletter",
+]
+
+SOURCE_MIN_SCORES = {
+    "soa": 0.6,
+    "thinkadvisor": 0.6,
+    "limra": 0.65,
+    "google_news": 0.5,
+    "rss": 0.55,
+}
