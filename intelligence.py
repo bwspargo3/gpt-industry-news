@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urljoin
 
 from bs4 import BeautifulSoup
 from groq import Groq
@@ -36,6 +36,10 @@ BROWSER_HEADERS = {
     "Connection": "keep-alive",
 }
 
+# ------------------------------------------------------------------
+# NAIC CACHE
+# ------------------------------------------------------------------
+
 def load_naic_cache():
     if not os.path.exists(NAIC_CACHE_FILE):
         return set()
@@ -44,7 +48,7 @@ def load_naic_cache():
             return set(json.load(f))
     except Exception:
         return set()
-        
+
 def save_naic_cache(cache_set):
     try:
         with open(NAIC_CACHE_FILE, "w") as f:
@@ -53,13 +57,12 @@ def save_naic_cache(cache_set):
         print(f"NAIC cache save error: {e}")
 
 # ------------------------------------------------------------------
-# NAIC LATF scraper (Kept intact - specialized regulatory structure)
+# NAIC LATF SCRAPER (FIXED)
 # ------------------------------------------------------------------
 
 def fetch_naic_latf():
     articles = []
 
-    # LOAD PREVIOUSLY SEEN ITEMS
     seen_cache = load_naic_cache()
     new_seen = set(seen_cache)
 
@@ -76,32 +79,26 @@ def fetch_naic_latf():
             re.IGNORECASE | re.DOTALL,
         )
 
+        nav_noise = [
+            "committee", "working group", "subgroup", "task force",
+            "materials", "membership", "agenda", "minutes",
+            "reporting", "online", "access", "view", "forms",
+            "tools"
+        ]
+
+        doc_signals = [
+            "report", "study", "impact", "faq", "memo",
+            "analysis", "guideline", "proposal", "update",
+            "exposure", "draft"
+        ]
+
         for m in pattern.finditer(resp.text):
             href = m.group(1).strip()
             text = re.sub(r"<[^>]+>", "", m.group(2)).strip()
 
-                        # -------------------------------------------------
-            # DROP NAVIGATION / WORKING GROUP STRUCTURE LINKS
-            # -------------------------------------------------
-            nav_noise = [
-                "committee",
-                "working group",
-                "subgroup",
-                "task force",
-                "materials",
-                "membership",
-                "agenda",
-                "minutes",
-                "reporting",
-                "online",
-                "access",
-                "view",
-                "forms",
-                "tools",
-            ]
-
-if any(x in text.lower() for x in nav_noise):
-    continue
+            # skip navigation noise
+            if any(x in text.lower() for x in nav_noise):
+                continue
 
             if href.startswith("/"):
                 href = "https://content.naic.org" + href
@@ -111,32 +108,15 @@ if any(x in text.lower() for x in nav_noise):
             if len(text) < 8:
                 continue
 
-                        # only keep "document-like" items
-            doc_signals = [
-                "report",
-                "study",
-                "impact",
-                "faq",
-                "memo",
-                "analysis",
-                "guideline",
-                "proposal",
-                "update",
-                "exposure",
-                "draft",
-            ]
-            
+            # keep only document-like items
             if not any(k in text.lower() for k in doc_signals):
                 continue
 
-            # CREATE UNIQUE KEY
             key = (text + "|" + href).lower().strip()
 
-            # 🚨 NEWNESS CHECK
             if key in seen_cache:
                 continue
 
-            # mark as new
             new_seen.add(key)
 
             articles.append({
@@ -149,7 +129,6 @@ if any(x in text.lower() for x in nav_noise):
                 "is_new": True,
             })
 
-        # SAVE UPDATED CACHE
         save_naic_cache(new_seen)
 
         print(f"    NAIC LATF (NEW ONLY): {len(articles)}")
@@ -158,6 +137,10 @@ if any(x in text.lower() for x in nav_noise):
         print(f"    NAIC LATF error: {e}")
 
     return articles
+
+# ------------------------------------------------------------------
+# EVERYTHING BELOW UNCHANGED (your pipeline is fine)
+# ------------------------------------------------------------------
 
 # ------------------------------------------------------------------
 # NewsAPI Fetcher (The primary replacement for HTML scraping)
