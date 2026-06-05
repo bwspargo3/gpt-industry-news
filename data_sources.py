@@ -1,250 +1,279 @@
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Google News Search Queries
-# Primary discovery mechanism — also serves as fallback for dead RSS feeds.
-# Google News reliably surfaces content from specific publications even when
-# their direct RSS feeds are dead or blocked.
+# These are the most reliable source of content variation.
+# Google News surfaces content from publications even when their
+# direct RSS feeds are dead or blocked.
 # (category, query)
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 SEARCH_QUERIES = [
-    # Core actuarial — valuation and reserving
-    ("Valuation & Reserving", "VM-20 life insurance reserve"),
-    ("Valuation & Reserving", "VM-22 annuity reserve"),
-    ("Valuation & Reserving", "principle based reserving NAIC"),
-    ("Valuation & Reserving", "asset adequacy testing life insurance"),
-    ("Valuation & Reserving", "AG 38 life insurance actuarial guideline"),
+    # Valuation & Reserving
+    ("Valuation & Reserving", "VM-20 life insurance reserve 2026"),
+    ("Valuation & Reserving", "VM-22 annuity reserve NAIC 2026"),
+    ("Valuation & Reserving", "principle based reserving life insurance"),
+    ("Valuation & Reserving", "asset adequacy testing life insurance actuary"),
+    ("Valuation & Reserving", "AG 38 actuarial guideline life insurance"),
+    ("Valuation & Reserving", "cash flow testing life insurance reserves"),
 
     # Regulatory
-    ("Regulatory", "NAIC Life Actuarial Task Force LATF"),
-    ("Regulatory", "NAIC life insurance actuarial guideline adopted"),
-    ("Regulatory", "NAIC model regulation life insurance"),
-    ("Regulatory", "state insurance department life annuity bulletin"),
+    ("Regulatory", "NAIC Life Actuarial Task Force LATF 2026"),
+    ("Regulatory", "NAIC actuarial guideline life insurance adopted"),
+    ("Regulatory", "NAIC model regulation life annuity"),
+    ("Regulatory", "state insurance department life annuity bulletin 2026"),
+    ("Regulatory", "DOL fiduciary rule annuity insurance 2026"),
 
     # Accounting
-    ("Accounting & LDTI", "LDTI long duration targeted improvements insurance"),
-    ("Accounting & LDTI", "ASC 944 insurance accounting FASB"),
+    ("Accounting & LDTI", "LDTI long duration targeted improvements 2026"),
+    ("Accounting & LDTI", "ASC 944 FASB insurance accounting 2026"),
+    ("Accounting & LDTI", "LDTI implementation life insurance 2026"),
 
     # Experience Studies
-    ("Mortality & Experience", "SOA mortality experience study life insurance"),
-    ("Mortality & Experience", "life insurance lapse policyholder behavior study"),
-    ("Mortality & Experience", "GLP-1 ozempic life insurance mortality impact"),
+    ("Mortality & Experience", "SOA mortality study life insurance 2026"),
+    ("Mortality & Experience", "life insurance lapse rate policyholder study"),
+    ("Mortality & Experience", "GLP-1 ozempic semaglutide life insurance mortality"),
     ("Mortality & Experience", "excess mortality life insurance claims 2026"),
+    ("Mortality & Experience", "longevity risk life annuity 2026"),
 
     # Reinsurance
-    ("Reinsurance", "life reinsurance transaction bermuda 2026"),
-    ("Reinsurance", "asset intensive reinsurance funds withheld modco"),
-    ("Reinsurance", "YRT coinsurance life reinsurance pricing"),
-    ("Reinsurance", "life insurance block acquisition reinsurance 2026"),
+    ("Reinsurance", "life reinsurance transaction 2026"),
+    ("Reinsurance", "asset intensive reinsurance bermuda life annuity"),
+    ("Reinsurance", "funds withheld modco YRT life reinsurance"),
+    ("Reinsurance", "life insurance block acquisition reinsurance deal"),
 
     # Capital
-    ("Capital & Risk", "life insurance RBC risk based capital NAIC"),
-    ("Capital & Risk", "AM Best life insurer rating action downgrade 2026"),
-    ("Capital & Risk", "Moodys Fitch life insurance outlook 2026"),
+    ("Capital & Risk", "life insurance RBC risk based capital NAIC 2026"),
+    ("Capital & Risk", "AM Best life insurer rating action upgrade downgrade 2026"),
+    ("Capital & Risk", "Moodys Fitch SP life insurance financial strength 2026"),
 
     # Annuities
-    ("Annuity Market", "fixed indexed annuity FIA sales LIMRA 2026"),
-    ("Annuity Market", "RILA registered index linked annuity sales 2026"),
-    ("Annuity Market", "MYGA multi year guaranteed annuity 2026"),
-    ("Annuity Market", "annuity hedging interest rate FIA carrier"),
+    ("Annuity Market", "fixed indexed annuity FIA sales record 2026"),
+    ("Annuity Market", "RILA registered index linked annuity 2026"),
+    ("Annuity Market", "MYGA multi year guaranteed annuity rates 2026"),
+    ("Annuity Market", "annuity sales LIMRA first quarter 2026"),
+    ("Annuity Market", "FIA hedging cost interest rate annuity carrier"),
 
-    # Product
-    ("Life Product Developments", "indexed universal life insurance IUL pricing"),
-    ("Life Product Developments", "term life insurance pricing filing 2026"),
+    # Life Products
+    ("Life Product Developments", "indexed universal life IUL pricing 2026"),
+    ("Life Product Developments", "term life insurance pricing trends 2026"),
     ("Life Product Developments", "AG 49 IUL illustration actuarial guideline"),
+    ("Life Product Developments", "whole life insurance dividend 2026"),
 
-    # Investments / ALM
-    ("Investments & ALM", "private credit life insurance portfolio allocation"),
-    ("Investments & ALM", "asset liability management annuity insurer duration"),
-    ("Investments & ALM", "structured credit insurance investment portfolio 2026"),
+    # Investments & ALM
+    ("Investments & ALM", "private credit life insurance portfolio 2026"),
+    ("Investments & ALM", "asset liability management life annuity insurer"),
+    ("Investments & ALM", "structured credit insurance investment 2026"),
+    ("Investments & ALM", "life insurer investment portfolio yield 2026"),
 
-    # Publication-targeted queries
-    # These reliably surface articles from specific outlets via Google News
-    # even when direct RSS is dead
+    # Industry Trends
+    ("Industry Trends", "artificial intelligence actuarial life insurance 2026"),
+    ("Industry Trends", "AI underwriting life insurance 2026"),
+    ("Industry Trends", "private equity life insurance acquisition 2026"),
+    ("Industry Trends", "insurtech life annuity digital 2026"),
+    ("Industry Trends", "life insurance distribution RIA bank channel 2026"),
+
+    # Publication-targeted queries — surfaces content from specific outlets
+    # even when their direct RSS is dead
     ("SOA / AAA Research",
-        "site:soa.org OR \"Society of Actuaries\" research report 2026"),
+        "\"Society of Actuaries\" research report life annuity 2026"),
     ("SOA / AAA Research",
         "\"American Academy of Actuaries\" life insurance annuity 2026"),
     ("SOA / AAA Research",
-        "\"The Actuary\" magazine life annuity valuation 2026"),
+        "\"The Actuary\" magazine SOA life annuity valuation"),
     ("Trade Press",
-        "\"Best's Review\" life insurance annuity actuarial"),
+        "\"Best's Review\" life insurance annuity actuarial 2026"),
     ("Trade Press",
         "\"National Underwriter\" life health insurance 2026"),
     ("Trade Press",
-        "\"InsuranceNewsNet\" life annuity actuarial 2026"),
+        "\"InsuranceNewsNet\" life annuity 2026"),
     ("Trade Press",
-        "\"Carrier Management\" life insurance reinsurance 2026"),
+        "\"Carrier Management\" life insurance reinsurance"),
     ("Trade Press",
         "\"Reinsurance News\" life annuity bermuda 2026"),
+    ("Trade Press",
+        "\"Insurance Journal\" life annuity actuarial 2026"),
     ("Annuity Market",
         "\"ThinkAdvisor\" annuity life insurance 2026"),
     ("Annuity Market",
-        "\"LIMRA\" annuity sales research 2026"),
+        "\"LIMRA\" annuity life insurance research 2026"),
     ("Consulting & Research",
-        "\"Milliman\" life insurance actuarial research 2026"),
+        "\"Milliman\" life insurance actuarial 2026"),
     ("Consulting & Research",
-        "\"Oliver Wyman\" life insurance annuity report 2026"),
+        "\"Oliver Wyman\" life insurance annuity 2026"),
     ("Consulting & Research",
-        "\"Deloitte\" life insurance LDTI regulatory 2026"),
+        "\"Deloitte\" life insurance LDTI 2026"),
     ("Consulting & Research",
         "\"EY\" OR \"Ernst Young\" life insurance actuarial 2026"),
     ("Consulting & Research",
-        "\"PwC\" life insurance capital reserving 2026"),
+        "\"PwC\" life insurance reserving capital 2026"),
     ("Consulting & Research",
-        "\"KPMG\" life insurance regulatory update 2026"),
+        "\"KPMG\" life insurance regulatory 2026"),
     ("Consulting & Research",
         "\"WTW\" OR \"Willis Towers Watson\" life insurance 2026"),
-
-    # Dynamic discovery — M&A, trends, emerging topics
-    ("Carrier Intelligence",  "life insurance company acquisition merger 2026"),
-    ("Carrier Intelligence",  "life annuity carrier strategic investment 2026"),
-    ("Reinsurance",           "reinsurance block transaction life annuity 2026"),
-    ("Industry Trends",       "artificial intelligence actuarial life insurance 2026"),
-    ("Industry Trends",       "AI underwriting life insurance pricing 2026"),
-    ("Industry Trends",       "private equity life insurance acquisition 2026"),
-    ("Industry Trends",       "insurtech life annuity digital distribution 2026"),
-    ("Annuity Market",        "annuity sales record 2026"),
-    ("Annuity Market",        "RIA fee based annuity fiduciary 2026"),
-    ("Regulatory",            "\"Federal Register\" IRS life insurance annuity 2026"),
+    ("Regulatory",
+        "\"Federal Register\" IRS life insurance annuity qualified"),
 ]
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 # Carrier Watchlist Queries
-# Specific enough to reduce false positives
-# (category, query)
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 CARRIER_SEARCH_QUERIES = [
     # Kansas City / Midwest
-    ("Carrier Intelligence", "Kansas City Life Insurance company 2026"),
-    ("Carrier Intelligence", "Ameritas Life insurance annuity 2026"),
-    ("Carrier Intelligence", "Securian Financial life insurance 2026"),
-    ("Carrier Intelligence", "Country Financial life insurance annuity 2026"),
-    ("Carrier Intelligence", "Business Men's Assurance BMI life insurance"),
-    ("Carrier Intelligence", "Midland National Life Insurance annuity 2026"),
-    ("Carrier Intelligence", "North American Company Life Annuity Sammons"),
+    ("Carrier Intelligence", "\"Kansas City Life\" insurance"),
+    ("Carrier Intelligence", "\"Ameritas Life\" insurance annuity"),
+    ("Carrier Intelligence", "\"Securian Financial\" life insurance"),
+    ("Carrier Intelligence", "\"Country Financial\" life insurance annuity"),
+    ("Carrier Intelligence", "\"Business Men's Assurance\" BMI life"),
+    ("Carrier Intelligence", "\"Midland National\" life insurance annuity"),
+    ("Carrier Intelligence", "\"North American Company\" life annuity Sammons"),
 
     # Large nationals
-    ("Carrier Intelligence", "Pacific Life Insurance annuity 2026"),
-    ("Carrier Intelligence", "Equitable Holdings life insurance annuity 2026"),
-    ("Carrier Intelligence", "AIG life insurance annuity 2026"),
-    ("Carrier Intelligence", "Brighthouse Financial annuity life 2026"),
-    ("Carrier Intelligence", "CNO Financial Bankers Life insurance 2026"),
-    ("Carrier Intelligence", "Global Atlantic life reinsurance 2026"),
-    ("Carrier Intelligence", "Protective Life Insurance annuity 2026"),
-    ("Carrier Intelligence", "Lincoln Financial life annuity 2026"),
-    ("Carrier Intelligence", "Transamerica life insurance annuity 2026"),
-    ("Carrier Intelligence", "Mutual of Omaha life insurance 2026"),
-    ("Carrier Intelligence", "26North Re reinsurance life"),
-    ("Carrier Intelligence", "Independent Life insurance acquisition"),
-
-    # Firm monitoring
-    ("Carrier Intelligence", "Actuarial Resources Corporation ARC actuarial"),
-    ("Carrier Intelligence", "Springline advisory actuarial consulting"),
+    ("Carrier Intelligence", "\"Pacific Life\" insurance annuity"),
+    ("Carrier Intelligence", "\"Equitable Holdings\" life insurance annuity"),
+    ("Carrier Intelligence", "\"AIG\" life insurance annuity 2026"),
+    ("Carrier Intelligence", "\"Brighthouse Financial\" annuity life"),
+    ("Carrier Intelligence", "\"CNO Financial\" OR \"Bankers Life\" insurance"),
+    ("Carrier Intelligence", "\"Global Atlantic\" life reinsurance"),
+    ("Carrier Intelligence", "\"Protective Life\" insurance annuity"),
+    ("Carrier Intelligence", "\"Lincoln Financial\" life annuity 2026"),
+    ("Carrier Intelligence", "\"Transamerica\" life insurance annuity 2026"),
+    ("Carrier Intelligence", "\"Mutual of Omaha\" life insurance 2026"),
+    ("Carrier Intelligence", "\"26North\" reinsurance life"),
+    ("Carrier Intelligence", "\"Independent Life\" insurance acquisition"),
+    ("Carrier Intelligence", "\"Sammons Financial\" life insurance"),
+    ("Carrier Intelligence", "\"Nassau Financial\" life insurance"),
+    ("Carrier Intelligence", "\"Athene\" annuity reinsurance 2026"),
+    ("Carrier Intelligence", "\"F&G\" Fidelity Guaranty life annuity"),
+    ("Carrier Intelligence", "\"Jackson National\" life annuity"),
+    ("Carrier Intelligence", "\"Nationwide\" life insurance annuity 2026"),
+    ("Carrier Intelligence", "\"Principal Financial\" life insurance 2026"),
 ]
 
-# -----------------------------------------------------------------------------
-# Direct RSS Feeds — VERIFIED WORKING as of June 2026
-# Only feeds confirmed to return valid content are listed here.
-# Dead feeds have been removed — Google News queries above cover those sources.
+# ------------------------------------------------------------------
+# Direct RSS Feeds — verified working or likely working
 # (category, source_name, url)
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 DIRECT_RSS_FEEDS = [
-    # The Actuary Magazine (SOA publication) — confirmed working
-    (
-        "SOA / AAA Research",
-        "The Actuary Magazine",
-        "https://theactuarymagazine.org/feed/"
-    ),
-
     # Insurance Journal — broad but filtered by scoring
     (
         "Trade Press",
         "Insurance Journal",
-        "https://www.insurancejournal.com/feed/"
+        "https://www.insurancejournal.com/feed/",
     ),
-
     # Carrier Management
     (
         "Trade Press",
         "Carrier Management",
-        "https://www.carriermanagement.com/feed/"
+        "https://www.carriermanagement.com/feed/",
     ),
-
     # Reinsurance News
     (
         "Reinsurance",
         "Reinsurance News",
-        "https://www.reinsurancene.ws/feed/"
+        "https://www.reinsurancene.ws/feed/",
     ),
-
-    # Life Annuity Specialist — was returning malformed XML; try with error tolerance
+    # Life Annuity Specialist — malformed XML handled by fallback parser
     (
         "Annuity Market",
         "Life Annuity Specialist",
-        "https://lifeannuityspecialist.com/feed/"
+        "https://lifeannuityspecialist.com/feed/",
     ),
-
-    # Federal Register — IRS life insurance only (narrow topic filter)
+    # Federal Register — IRS life insurance only
     (
         "Regulatory",
         "Federal Register (IRS Life)",
         "https://www.federalregister.gov/api/v1/articles.rss"
         "?agencies[]=internal-revenue-service"
-        "&topics[]=life-insurance"
+        "&topics[]=life-insurance",
+    ),
+    # Advisor Perspectives — has working RSS, covers annuity/retirement
+    (
+        "Annuity Market",
+        "Advisor Perspectives",
+        "https://www.advisorperspectives.com/rss",
+    ),
+    # Investment News — covers annuity/retirement distribution
+    (
+        "Annuity Market",
+        "InvestmentNews",
+        "https://www.investmentnews.com/rss",
+    ),
+    # Pensions & Investments — insurance investment coverage
+    (
+        "Investments & ALM",
+        "Pensions & Investments",
+        "https://www.pionline.com/rss/all",
     ),
 ]
 
-# -----------------------------------------------------------------------------
-# Targeted HTML Scrapers
-# Each scraper is purpose-built for its source's actual page structure.
-# More reliable than RSS for sources that have killed their feeds.
+# ------------------------------------------------------------------
+# HTML Scrape Targets
 # (category, source_name, url, scraper_id)
-# scraper_id maps to a specific extraction function in intelligence.py
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------
 
 HTML_SCRAPE_TARGETS = [
+    # SOA — correct current URL for life research
     (
         "SOA / AAA Research",
         "SOA Research Institute",
-        "https://www.soa.org/research/research-topic/life-annuities/",
-        "soa_research"
+        "https://www.soa.org/research/topics/life-ann-res-topic-list/",
+        "soa_research",
     ),
+    # SOA news — correct current URL
     (
         "SOA / AAA Research",
         "SOA News",
-        "https://www.soa.org/news/",
-        "soa_news"
+        "https://www.soa.org/news-and-publications/news/",
+        "soa_news",
     ),
+    # NAIC newsroom — working
     (
         "Regulatory",
         "NAIC Newsroom",
         "https://content.naic.org/newsroom",
-        "naic_newsroom"
+        "naic_newsroom",
     ),
+    # LIMRA — working
     (
         "Annuity Market",
         "LIMRA Newsroom",
         "https://www.limra.com/en/newsroom/",
-        "limra_newsroom"
+        "limra_newsroom",
     ),
-    (
-        "Annuity Market",
-        "ThinkAdvisor Life & Health",
-        "https://www.thinkadvisor.com/life-health/",
-        "thinkadvisor"
-    ),
+    # ThinkAdvisor — scrape main page instead of subsection
     (
         "Trade Press",
-        "InsuranceNewsNet",
-        "https://insurancenewsnet.com/oarticle/life-annuity",
-        "insurancenewsnet"
+        "ThinkAdvisor",
+        "https://www.thinkadvisor.com/",
+        "thinkadvisor",
     ),
+    # Milliman — correct URL
     (
         "Consulting & Research",
         "Milliman Insights",
-        "https://www.milliman.com/en/insight?practice=life-financial-reporting",
-        "milliman"
+        "https://www.milliman.com/en/insight",
+        "milliman",
+    ),
+    # InsuranceNewsNet — scrape main page
+    (
+        "Trade Press",
+        "InsuranceNewsNet",
+        "https://insurancenewsnet.com/",
+        "insurancenewsnet",
+    ),
+    # AAA — American Academy of Actuaries
+    (
+        "SOA / AAA Research",
+        "American Academy of Actuaries",
+        "https://www.actuary.org/content/publications-0",
+        "aaa_publications",
+    ),
+    # AM Best — news page (not PR wire)
+    (
+        "Rating Agency Actions",
+        "AM Best News",
+        "https://www.ambest.com/news/",
+        "ambest_news",
     ),
 ]
