@@ -282,8 +282,8 @@ def collect_news():
         add(category, fetch_direct_rss(url, source), source)
 
     print("  NewsAPI (bulk)...")
-newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
-add("NewsAPI", newsapi_articles, "NewsAPI")
+    newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
+    add("NewsAPI", newsapi_articles, "NewsAPI")
 
     print("  Google News (industry)...")
     for category, query in SEARCH_QUERIES:
