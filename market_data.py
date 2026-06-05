@@ -1,94 +1,153 @@
-import os
 import requests
-import config
 
-# Use the FRED API key from environment, fallback to a default if necessary
-FRED_API_KEY = os.getenv("FRED_API_KEY", "demo")
+from config import TREASURY_SERIES, FRED_ADDITIONAL
+
+# -----------------------------------------------------------------------------
+# FRED Fetcher (generic)
+# -----------------------------------------------------------------------------
 
 def fetch_fred_series(series_id):
     """
-    Queries the FRED API for the most recent observation of a given series.
-    Safely catches missing values and handles holiday string placeholders.
+    Fetches the most recent non-null value for any FRED series.
+    Returns {"date": str, "value": float} or None.
     """
     try:
-        url = "https://api.stlouisfed.org/fred/series/observations"
-        params = {
-            "series_id": series_id,
-            "sort_order": "desc",
-            "limit": 1,
-            "file_type": "json",
-            "api_key": FRED_API_KEY
-        }
-        response = requests.get(url, params=params, timeout=15)
+        url = (
+            f"https://fred.stlouisfed.org/"
+            f"graph/fredgraph.csv?id={series_id}"
+        )
+        response = requests.get(url, timeout=15)
         response.raise_for_status()
-        data = response.json()
-        observations = data.get("observations", [])
-        if observations:
-            obs = observations[0]
-            # Handle cases where FRED returns '.' for missing/holiday data points
-            if obs["value"] == ".":
-                return None
-            return {
-                "date": obs["date"],
-                "value": float(obs["value"])
-            }
-    except Exception as e:
-        print(f"    Error fetching FRED series {series_id}: {e}")
+
+        lines = response.text.strip().splitlines()
+
+        for row in reversed(lines[1:]):
+            parts = row.split(",")
+            if len(parts) < 2:
+                continue
+            date_str, value = parts[0], parts[1]
+            if value not in (".", ""):
+                return {
+                    "date":  date_str,
+                    "value": float(value),
+                }
+
+    except Exception:
+        pass
+
     return None
 
+# -----------------------------------------------------------------------------
+# Treasury Yields
+# -----------------------------------------------------------------------------
+
+def fetch_treasury_yields():
+    return {
+        label: fetch_fred_series(series_id)
+        for label, series_id in TREASURY_SERIES.items()
+    }
+
+# -----------------------------------------------------------------------------
+# SOFR
+# -----------------------------------------------------------------------------
+
 def fetch_sofr():
-    """
-    Bypasses the NY Fed firewall by pulling SOFR directly from FRED 
-    via the dedicated 'SOFR' tracking series.
-    """
     try:
-        result = fetch_fred_series("SOFR")
-        if not result:
-            print("    Warning: SOFR data returned None from FRED.")
-        return result
-    except Exception as e:
-        print(f"    Error in fetch_sofr: {e}")
+        response = requests.get(
+            "https://markets.newyorkfed.org/api/rates/sofr/last/1.json",
+            timeout=15,
+        )
+        response.raise_for_status()
+        item = response.json()["refRates"][0]
+        return {
+            "date":  item["effectiveDate"],
+            "value": float(item["percentRate"]),
+        }
+    except Exception:
         return None
 
-def fetch_macro_indicators():
-    """
-    Fetches macroeconomic data from FRED for asset adequacy and assumption governance.
-    """
-    try:
-        return {
-            "unemployment": fetch_fred_series("UNRATE"),
-            "mortgage_30y": fetch_fred_series("MORTGAGE30US")
-        }
-    except Exception as e:
-        print(f"    Error fetching macro indicators: {e}")
-        return {}
+# -----------------------------------------------------------------------------
+# Additional Market Data
+# -----------------------------------------------------------------------------
 
-def build_market_data():
-    """
-    Main data aggregation pipeline that loops through configurations dynamically.
-    Ensures that adding or editing metrics in config.py auto-updates the engine.
-    """
-    print("Gathering market data context programmatically...")
-    
-    # Pull core treasuries dynamically from config mapping
-    treasuries = {}
-    for label, series_id in config.TREASURY_SERIES.items():
-        treasuries[label] = fetch_fred_series(series_id)
-        
-    # Pull credit spreads and volatility dynamically from config mapping
-    additional = {}
-    for label, series_id in config.FRED_ADDITIONAL.items():
-        additional[label] = fetch_fred_series(series_id)
-        
-    # Calculate 2Y/10Y yield spread dynamically if both metrics are valid
-    spread = None
-    if treasuries.get("10Y") and treasuries.get("2Y"):
-        spread = treasuries["10Y"]["value"] - treasuries["2Y"]["value"]
-        
+def fetch_additional_market_data():
     return {
-        "treasuries": treasuries,
-        "sofr": fetch_sofr(),
-        "spread": spread,
-        "additional": additional,
-        "macro": fetch_macro_indicators()
+        key: fetch_fred_series(series_id)
+        for key, series_id in FRED_ADDITIONAL.items()
     }
+
+# -----------------------------------------------------------------------------
+# Market Snapshot
+# -----------------------------------------------------------------------------
+
+def build_market_snapshot():
+
+    treasuries  = fetch_treasury_yields()
+    sofr        = fetch_sofr()
+    additional  = fetch_additional_market_data()
+
+    spread = None
+    if treasuries.get("2Y") and treasuries.get("10Y"):
+        spread = (
+            treasuries["10Y"]["value"]
+            - treasuries["2Y"]["value"]
+        )
+
+    snapshot = {
+        "treasuries": treasuries,
+        "sofr":       sofr,
+        "spread":     spread,
+        "additional": additional,
+    }
+
+    return snapshot
+
+# -----------------------------------------------------------------------------
+# Market Narrative (for Groq prompt injection)
+# -----------------------------------------------------------------------------
+
+def generate_market_narrative(snapshot):
+
+    t           = snapshot.get("treasuries", {})
+    spread      = snapshot.get("spread")
+    additional  = snapshot.get("additional", {})
+
+    lines = []
+
+    # Yield curve
+    t10 = t.get("10Y")
+    t30 = t.get("30Y")
+    t2  = t.get("2Y")
+
+    if t10:
+        lines.append(f"10Y Treasury: {t10['value']:.2f}%")
+    if t30:
+        lines.append(f"30Y Treasury: {t30['value']:.2f}%")
+    if t2:
+        lines.append(f"2Y Treasury:  {t2['value']:.2f}%")
+
+    if spread is not None:
+        direction = "normal" if spread > 0 else "inverted"
+        lines.append(
+            f"2Y/10Y Spread: {spread:+.2f}% ({direction} curve)"
+        )
+
+    # Credit spreads
+    ig = additional.get("IG_OAS")
+    hy = additional.get("HY_OAS")
+    if ig:
+        lines.append(f"IG Credit Spread (OAS): {ig['value'] * 100:.0f} bps")
+    if hy:
+        lines.append(f"HY Credit Spread (OAS): {hy['value'] * 100:.0f} bps")
+
+    # Inflation breakeven
+    be = additional.get("BREAKEVEN_10Y")
+    if be:
+        lines.append(f"10Y Inflation Breakeven: {be['value']:.2f}%")
+
+    # VIX
+    vix = additional.get("VIX")
+    if vix:
+        lines.append(f"VIX: {vix['value']:.1f}")
+
+    return "\n".join(lines) if lines else "Market data unavailable."
