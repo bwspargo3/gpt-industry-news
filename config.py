@@ -66,6 +66,44 @@ NOISE_PHRASES = [
     "sponsored",
     "subscribe",
     "newsletter",
+    "police dog", "kyle busch", "pga tournament",
+    "offshore wind farm", "compounding pharmac",
+    "kids' activities", "great place to work",
+    "zymo research", "uzbekistan", "stablecoin",
+    "crypto etf", "lie detector", "venture funding",
+    "medicaid mandates", "south koreans' annual",
+    "poland aims", "nami statement", "recess expands",
+    "real estate", "stream realty",
+    "auto insurance rate", "auto rates",
+    "hurricane season", "workers compensation",
+    "workers' compensation", "homeowners",
+    "flood insurance", "earthquake",
+    "anadromous fish", "endangered species",
+    "migratory bird", "wetlands", "pesticide",
+    "food safety", "aviation", "railroad",
+    "coast guard", "nuclear", "veterans",
+    "tribal", "agriculture", "forestry",
+    "mining", "osha", "occupational safety",
+
+    # NEW — P&C / casualty content not relevant to life/annuity actuaries
+    "casualty treaty",              # casualty treaty reinsurance
+    "casualty actuarial society",   # P&C actuarial content
+    "commercial underwriter",       # P&C underwriting roles
+    "workplace well-being",         # HR/workforce topics
+    "cyber crime",                  # cyber security, not insurance
+    "cyber problem",
+    "property casualty",
+    "homeowners insurance",
+    "commercial lines",
+    "surety bond",
+    "workers' comp",
+    "crop insurance",
+    "pet insurance",
+    "travel insurance",
+    # People moves for non-life roles
+    "agriculture platform senior",
+    "cto appointment",
+    "chief technology officer",     # narrow — tech exec moves rarely relevant
 ]
 
 SOURCE_MIN_SCORES = {
