@@ -1,4 +1,5 @@
 import re
+import html as html_lib
 import json
 import requests
 from bs4 import BeautifulSoup
@@ -13,19 +14,17 @@ BROWSER_HEADERS = {
     "Connection": "keep-alive",
 }
 
-# -----------------------------
-# CONFIG
-# -----------------------------
-NAIC_TTL_DAYS = 90
+NAIC_TTL_DAYS  = 90
 NAIC_MAX_ITEMS = 1500
 
-BASE_URL = "https://content.naic.org"
+BASE_URL  = "https://content.naic.org"
 INDEX_URL = f"{BASE_URL}/cmte_a_latf.htm"
 
 
-# -----------------------------
-# CACHE (STATE STORE)
-# -----------------------------
+# ------------------------------------------------------------------
+# Cache helpers
+# ------------------------------------------------------------------
+
 def load_naic_cache():
     try:
         with open(NAIC_CACHE_FILE, "r") as f:
@@ -42,39 +41,29 @@ def save_naic_cache(state):
         print(f"NAIC cache save error: {e}")
 
 
-# -----------------------------
-# HELPERS
-# -----------------------------
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
 def make_id(url: str) -> str:
     return re.sub(r"[^a-z0-9]", "", url.lower())
 
 
 def classify_doc_type(text: str) -> str:
     t = text.lower()
-
-    if "impact" in t:
-        return "impact_study"
-    if "exposure" in t or "draft" in t:
-        return "exposure_draft"
-    if "faq" in t:
-        return "faq"
-    if "memo" in t:
-        return "memo"
-    if "report" in t:
-        return "report"
-    if "update" in t:
-        return "update"
-    if "study" in t:
-        return "study"
-
+    if "impact" in t:        return "impact_study"
+    if "exposure" in t or "draft" in t: return "exposure_draft"
+    if "faq" in t:           return "faq"
+    if "memo" in t:          return "memo"
+    if "report" in t:        return "report"
+    if "update" in t:        return "update"
+    if "study" in t:         return "study"
     return "other"
 
 
 def extract_date(text: str):
     m = re.search(r"(\d{4}-\d{2}-\d{2})", text)
-    if m:
-        return m.group(1)
-    return None
+    return m.group(1) if m else None
 
 
 def prune_state(state: dict) -> dict:
@@ -86,45 +75,57 @@ def prune_state(state: dict) -> dict:
         except Exception:
             return None
 
-    # remove old
-    pruned = {}
-    for k, v in state.items():
-        d = parse(v.get("date"))
-        if d and d < cutoff:
-            continue
-        pruned[k] = v
-
-    # cap size (keep newest first)
-    def sort_key(item):
-        d = parse(item[1].get("date"))
-        return d or datetime.min
+    pruned = {
+        k: v for k, v in state.items()
+        if not (parse(v.get("date")) and parse(v.get("date")) < cutoff)
+    }
 
     if len(pruned) > NAIC_MAX_ITEMS:
-        items = sorted(pruned.items(), key=sort_key, reverse=True)
+        items = sorted(
+            pruned.items(),
+            key=lambda x: parse(x[1].get("date")) or datetime.min,
+            reverse=True,
+        )
         pruned = dict(items[:NAIC_MAX_ITEMS])
 
     return pruned
 
 
-# -----------------------------
-# MAIN SCRAPER (STATEFUL DIFF)
-# -----------------------------
+def _clean_text(raw: str) -> str:
+    """Strip HTML tags and entities, normalize whitespace."""
+    stripped = re.sub(r"<[^>]+>", " ", raw)
+    unescaped = html_lib.unescape(stripped)
+    return re.sub(r"\s+", " ", unescaped).strip()
+
+
+def _is_pdf(url: str, content_type: str) -> bool:
+    return (
+        url.lower().endswith(".pdf")
+        or "application/pdf" in content_type.lower()
+    )
+
+
+# ------------------------------------------------------------------
+# Main fetcher
+# ------------------------------------------------------------------
+
+NAV_NOISE = {
+    "committee", "working group", "subgroup", "task force",
+    "materials", "membership", "calendar", "forms", "tools",
+    "access", "view", "login", "subscribe", "contact",
+}
+
+
 def fetch_naic_latf():
     old_state = load_naic_cache()
     new_state = {}
     new_items = []
 
-    NAV_NOISE = {
-        "committee", "working group", "subgroup", "task force",
-        "materials", "membership", "agenda", "minutes",
-        "calendar", "forms", "tools", "access", "view"
-    }
-
     try:
         resp = requests.get(INDEX_URL, headers=BROWSER_HEADERS, timeout=20)
         resp.raise_for_status()
 
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup  = BeautifulSoup(resp.text, "lxml")
         links = soup.select("a[href]")
 
         for a in links:
@@ -133,7 +134,6 @@ def fetch_naic_latf():
 
             if len(text) < 10:
                 continue
-
             if any(n in text.lower() for n in NAV_NOISE):
                 continue
 
@@ -146,47 +146,62 @@ def fetch_naic_latf():
 
             doc_id = make_id(url)
 
-            # skip unchanged
+            # Already cached — carry forward, don't re-fetch
             if doc_id in old_state:
                 new_state[doc_id] = old_state[doc_id]
                 continue
 
-            # fetch page
+            # --------------------------------------------------
+            # Fetch the linked resource
+            # --------------------------------------------------
             try:
-                page = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
+                page = requests.get(
+                    url, headers=BROWSER_HEADERS,
+                    timeout=15, stream=True,
+                )
                 page.raise_for_status()
-                page_text = page.text
+                content_type = page.headers.get("Content-Type", "")
+
+                if _is_pdf(url, content_type):
+                    # PDF — use link text only; never read binary body
+                    page.close()
+                    page_clean   = ""
+                    snippet      = f"PDF document: {text}"
+                    date_source  = text   # date regex on link text
+                else:
+                    # HTML page — read, strip tags, clean entities
+                    raw_html     = page.text
+                    page_clean   = _clean_text(raw_html)[:1000]
+                    snippet      = page_clean[:250]
+                    date_source  = page_clean
+
             except Exception:
                 continue
 
-            doc_type = classify_doc_type(text + page_text)
+            # Classify using link text + cleaned page text (never binary)
+            doc_type = classify_doc_type(text + " " + page_clean)
 
             if doc_type == "other":
                 continue
 
             record = {
-                "id": doc_id,
-                "title": text,
-                "doc_type": doc_type,
+                "id":        doc_id,
+                "title":     text,
+                "doc_type":  doc_type,
                 "committee": "LATF",
-                "date": extract_date(page_text),
-                "url": url,
-                "snippet": page_text[:250],
+                "date":      extract_date(date_source),
+                "url":       url,
+                "snippet":   snippet,
             }
 
             new_state[doc_id] = record
             new_items.append(record)
 
-        # merge old + new
-        merged = {**old_state, **new_state}
-
-        # prune
-        merged = prune_state(merged)
-
+        # Merge and prune
+        merged = prune_state({**old_state, **new_state})
         save_naic_cache(merged)
 
         print(f"    NAIC LATF new: {len(new_items)} | stored: {len(merged)}")
-
         return new_items
 
     except Exception as e:
@@ -194,12 +209,12 @@ def fetch_naic_latf():
         return []
 
 
-# -----------------------------
-# CHANGE LOG FOR LLM
-# -----------------------------
+# ------------------------------------------------------------------
+# Change log for LLM prompt
+# ------------------------------------------------------------------
+
 def build_naic_change_log(new_items):
-    # Filter to only genuine NAIC LATF records — regular news articles
-    # from the Regulatory bucket don't have doc_type and must be excluded
+    # Only process genuine LATF records (have doc_type)
     latf_items = [i for i in new_items if "doc_type" in i]
 
     if not latf_items:
