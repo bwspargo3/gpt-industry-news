@@ -51,13 +51,13 @@ def make_id(url: str) -> str:
 
 def classify_doc_type(text: str) -> str:
     t = text.lower()
-    if "impact" in t:        return "impact_study"
-    if "exposure" in t or "draft" in t: return "exposure_draft"
-    if "faq" in t:           return "faq"
-    if "memo" in t:          return "memo"
-    if "report" in t:        return "report"
-    if "update" in t:        return "update"
-    if "study" in t:         return "study"
+    if "impact"                    in t: return "impact_study"
+    if "exposure" in t or "draft"  in t: return "exposure_draft"
+    if "faq"                       in t: return "faq"
+    if "memo"                      in t: return "memo"
+    if "report"                    in t: return "report"
+    if "update"                    in t: return "update"
+    if "study"                     in t: return "study"
     return "other"
 
 
@@ -93,7 +93,7 @@ def prune_state(state: dict) -> dict:
 
 def _clean_text(raw: str) -> str:
     """Strip HTML tags and entities, normalize whitespace."""
-    stripped = re.sub(r"<[^>]+>", " ", raw)
+    stripped  = re.sub(r"<[^>]+>", " ", raw)
     unescaped = html_lib.unescape(stripped)
     return re.sub(r"\s+", " ", unescaped).strip()
 
@@ -146,14 +146,12 @@ def fetch_naic_latf():
 
             doc_id = make_id(url)
 
-            # Already cached — carry forward, don't re-fetch
+            # Already cached — carry forward unchanged
             if doc_id in old_state:
                 new_state[doc_id] = old_state[doc_id]
                 continue
 
-            # --------------------------------------------------
             # Fetch the linked resource
-            # --------------------------------------------------
             try:
                 page = requests.get(
                     url, headers=BROWSER_HEADERS,
@@ -163,22 +161,22 @@ def fetch_naic_latf():
                 content_type = page.headers.get("Content-Type", "")
 
                 if _is_pdf(url, content_type):
-                    # PDF — use link text only; never read binary body
+                    # PDF — never read binary body; use link text for everything
                     page.close()
-                    page_clean   = ""
-                    snippet      = f"PDF document: {text}"
-                    date_source  = text   # date regex on link text
+                    page_clean  = ""
+                    # Snippet is just the title — clean, no "PDF document:" prefix
+                    snippet     = text
+                    date_source = text
                 else:
-                    # HTML page — read, strip tags, clean entities
-                    raw_html     = page.text
-                    page_clean   = _clean_text(raw_html)[:1000]
-                    snippet      = page_clean[:250]
-                    date_source  = page_clean
+                    raw_html    = page.text
+                    page_clean  = _clean_text(raw_html)[:1000]
+                    snippet     = page_clean[:250]
+                    date_source = page_clean
 
             except Exception:
                 continue
 
-            # Classify using link text + cleaned page text (never binary)
+            # Classify using link text + cleaned page text only (never binary)
             doc_type = classify_doc_type(text + " " + page_clean)
 
             if doc_type == "other":
@@ -191,13 +189,13 @@ def fetch_naic_latf():
                 "committee": "LATF",
                 "date":      extract_date(date_source),
                 "url":       url,
+                "source":    "NAIC LATF",   # FIXED: was missing, caused "(Unknown)" in LLM
                 "snippet":   snippet,
             }
 
             new_state[doc_id] = record
             new_items.append(record)
 
-        # Merge and prune
         merged = prune_state({**old_state, **new_state})
         save_naic_cache(merged)
 
@@ -213,9 +211,13 @@ def fetch_naic_latf():
 # Change log for LLM prompt
 # ------------------------------------------------------------------
 
-def build_naic_change_log(new_items):
-    # Only process genuine LATF records (have doc_type)
-    latf_items = [i for i in new_items if "doc_type" in i]
+def build_naic_change_log(regulatory_articles):
+    """
+    Builds a structured summary of new NAIC LATF items for the LLM.
+    Only processes genuine LATF records (have doc_type key).
+    Regular regulatory news articles are ignored here.
+    """
+    latf_items = [i for i in regulatory_articles if "doc_type" in i]
 
     if not latf_items:
         return "No new NAIC LATF developments."
