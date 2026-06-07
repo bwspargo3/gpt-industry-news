@@ -38,26 +38,106 @@ def save_naic_cache(state):
         with open(NAIC_CACHE_FILE, "w") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
-        print(f"NAIC cache save error: {e}")
+        print(f"    NAIC cache save error: {e}")
 
 
 # ------------------------------------------------------------------
-# Helpers
+# Content-type helpers
 # ------------------------------------------------------------------
 
-def make_id(url: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", url.lower())
+def _is_binary_content(url: str, content_type: str) -> bool:
+    """
+    Returns True if the URL or Content-Type indicates binary content
+    that should never be read as text (PDF, DOCX, ZIP, etc.).
+    """
+    ct  = content_type.lower()
+    url_lower = url.lower()
+    return (
+        url_lower.endswith((".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".zip"))
+        or "application/pdf"              in ct
+        or "application/vnd.openxml"      in ct   # DOCX, XLSX, PPTX
+        or "application/msword"           in ct   # Legacy DOC
+        or "application/octet-stream"     in ct   # Generic binary
+        or "application/zip"              in ct
+    )
 
+
+def _is_garbage(text: str) -> bool:
+    """
+    Returns True if text appears to be binary data, raw JavaScript,
+    or other non-human-readable content.
+    """
+    if not text:
+        return True
+
+    sample = text[:400]
+
+    # Known binary file headers
+    binary_markers = ["%PDF", "PK!\x03\x04", "\x00\x00\x00", "Content_Types"]
+    if any(m in sample for m in binary_markers):
+        return True
+
+    # JavaScript / dynamic page content that BeautifulSoup missed
+    js_markers = [
+        "(function(w,d,", "window.soutronContext", "gtm.js",
+        "OfrsWeb", "dataLayer", "googletagmanager",
+        "ApplicationBaseUrl", "ApplicationLmsUrl",
+    ]
+    if any(m in sample for m in js_markers):
+        return True
+
+    # High density of non-printable / non-ASCII characters = binary
+    weird = sum(
+        1 for c in sample
+        if ord(c) > 255 or (ord(c) < 32 and c not in "\t\n\r ")
+    )
+    if sample and (weird / len(sample)) > 0.12:
+        return True
+
+    return False
+
+
+# ------------------------------------------------------------------
+# Text cleaning
+# ------------------------------------------------------------------
+
+def _clean_text(raw: str) -> str:
+    """
+    Strips HTML including script/style element CONTENT,
+    unescapes HTML entities, normalizes whitespace.
+
+    Uses BeautifulSoup to correctly remove <script>/<style> blocks
+    (regex tag-stripping leaves JS code between the tags intact).
+    """
+    try:
+        soup = BeautifulSoup(raw, "lxml")
+        # Remove entire elements including their text content
+        for tag in soup(["script", "style", "noscript", "meta", "link", "head"]):
+            tag.decompose()
+        text = soup.get_text(separator=" ")
+    except Exception:
+        # Fallback if lxml not available
+        text = re.sub(r"<[^>]+>", " ", raw)
+
+    text = html_lib.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# ------------------------------------------------------------------
+# Document classification
+# ------------------------------------------------------------------
 
 def classify_doc_type(text: str) -> str:
     t = text.lower()
-    if "impact"                    in t: return "impact_study"
-    if "exposure" in t or "draft"  in t: return "exposure_draft"
-    if "faq"                       in t: return "faq"
-    if "memo"                      in t: return "memo"
-    if "report"                    in t: return "report"
-    if "update"                    in t: return "update"
-    if "study"                     in t: return "study"
+    if "impact"                      in t: return "impact_study"
+    if "exposure" in t and "draft"   in t: return "exposure_draft"
+    if "faq"                         in t: return "faq"
+    if "memo" in t or "memorandum"   in t: return "memo"
+    if "report"                      in t: return "report"
+    if "update"                      in t: return "update"
+    if "study"                       in t: return "study"
+    if "minutes"                     in t: return "minutes"
+    if "survey"                      in t: return "survey"
     return "other"
 
 
@@ -91,30 +171,57 @@ def prune_state(state: dict) -> dict:
     return pruned
 
 
-def _clean_text(raw: str) -> str:
-    """Strip HTML tags and entities, normalize whitespace."""
-    stripped  = re.sub(r"<[^>]+>", " ", raw)
-    unescaped = html_lib.unescape(stripped)
-    return re.sub(r"\s+", " ", unescaped).strip()
+# ------------------------------------------------------------------
+# Navigation noise filter
+# Words/phrases in a link's text that mean it is a nav/utility
+# item, not an actuarial document.
+# ------------------------------------------------------------------
+
+NAV_NOISE_WORDS = {
+    # Generic nav
+    "committee", "working group", "subgroup", "task force",
+    "materials", "membership", "calendar", "forms", "tools",
+    "login", "subscribe", "contact", "sign in",
+    # NAIC utility pages that slip through classify_doc_type
+    "state disaster",           # "State Disaster Reporting"
+    "online fraud",             # "Online Fraud Reporting System"
+    "disaster reporting",
+    "fraud reporting",
+    "library archives",         # "Library Archives and regulatory resources"
+    "libraryarchives",
+    "see all current",          # "See all Current Exposure Drafts" (nav link)
+    "mynaic",                   # myNAIC portal
+    "technology applications",  # "Technology Applications (myNAIC)"
+    "regulatory resources",     # generic library page
+    "proceedings of the naic",  # large compendium, too broad
+}
+
+# Actuarial keywords that must appear in the document title.
+# Documents with NONE of these are unlikely to be relevant.
+ACTUARIAL_TITLE_KEYWORDS = {
+    "life", "annuity", "actuarial", "reserve", "pbr",
+    "vm-", "rbc", "reinsurance", "mortality", "fia", "rila",
+    "iul", "myga", "valuation", "model", "sofr", "libor",
+    "principle", "capital", "insurance", "policyholder",
+    "group annuity", "impact study", "pilot project",
+    "exposure draft", "minutes", "memo", "report",
+    "survey", "faq", "guideline",
+}
 
 
-def _is_pdf(url: str, content_type: str) -> bool:
-    return (
-        url.lower().endswith(".pdf")
-        or "application/pdf" in content_type.lower()
-    )
+def _is_nav_noise(text: str) -> bool:
+    t = text.lower()
+    return any(phrase in t for phrase in NAV_NOISE_WORDS)
+
+
+def _has_actuarial_content(text: str) -> bool:
+    t = text.lower()
+    return any(kw in t for kw in ACTUARIAL_TITLE_KEYWORDS)
 
 
 # ------------------------------------------------------------------
 # Main fetcher
 # ------------------------------------------------------------------
-
-NAV_NOISE = {
-    "committee", "working group", "subgroup", "task force",
-    "materials", "membership", "calendar", "forms", "tools",
-    "access", "view", "login", "subscribe", "contact",
-}
-
 
 def fetch_naic_latf():
     old_state = load_naic_cache()
@@ -132,11 +239,19 @@ def fetch_naic_latf():
             text = a.get_text(strip=True)
             href = a.get("href", "")
 
-            if len(text) < 10:
-                continue
-            if any(n in text.lower() for n in NAV_NOISE):
+            # Basic length check
+            if len(text) < 8:
                 continue
 
+            # Filter navigation / utility links
+            if _is_nav_noise(text):
+                continue
+
+            # Must have at least one actuarial keyword in title
+            if not _has_actuarial_content(text):
+                continue
+
+            # Build absolute URL
             if href.startswith("/"):
                 url = BASE_URL + href
             elif href.startswith("http"):
@@ -146,37 +261,59 @@ def fetch_naic_latf():
 
             doc_id = make_id(url)
 
-            # Already cached — carry forward unchanged
+            # Already in old cache — carry forward
             if doc_id in old_state:
                 new_state[doc_id] = old_state[doc_id]
                 continue
 
+            # Already processed this run (duplicate link on page)
+            if doc_id in new_state:
+                continue
+
+            # --------------------------------------------------------
             # Fetch the linked resource
+            # --------------------------------------------------------
             try:
                 page = requests.get(
-                    url, headers=BROWSER_HEADERS,
-                    timeout=15, stream=True,
+                    url,
+                    headers=BROWSER_HEADERS,
+                    timeout=15,
+                    stream=True,
                 )
                 page.raise_for_status()
                 content_type = page.headers.get("Content-Type", "")
 
-                if _is_pdf(url, content_type):
-                    # PDF — never read binary body; use link text for everything
+                if _is_binary_content(url, content_type):
+                    # Never read binary body — use link text as snippet
                     page.close()
                     page_clean  = ""
-                    # Snippet is just the title — clean, no "PDF document:" prefix
                     snippet     = text
                     date_source = text
                 else:
+                    # Read HTML, strip scripts, clean text
                     raw_html    = page.text
-                    page_clean  = _clean_text(raw_html)[:1000]
-                    snippet     = page_clean[:250]
-                    date_source = page_clean
+
+                    # Safety check: server lied about Content-Type
+                    if _is_garbage(raw_html[:200]):
+                        page_clean  = ""
+                        snippet     = text
+                        date_source = text
+                    else:
+                        page_clean  = _clean_text(raw_html)[:1000]
+                        date_source = page_clean
+
+                        # Validate cleaned text is usable
+                        if _is_garbage(page_clean[:200]):
+                            snippet = text
+                        else:
+                            snippet = page_clean[:250] if page_clean else text
 
             except Exception:
                 continue
 
-            # Classify using link text + cleaned page text only (never binary)
+            # --------------------------------------------------------
+            # Classify document type
+            # --------------------------------------------------------
             doc_type = classify_doc_type(text + " " + page_clean)
 
             if doc_type == "other":
@@ -189,7 +326,7 @@ def fetch_naic_latf():
                 "committee": "LATF",
                 "date":      extract_date(date_source),
                 "url":       url,
-                "source":    "NAIC LATF",   # FIXED: was missing, caused "(Unknown)" in LLM
+                "source":    "NAIC LATF",
                 "snippet":   snippet,
             }
 
@@ -207,15 +344,18 @@ def fetch_naic_latf():
         return []
 
 
+def make_id(url: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", url.lower())
+
+
 # ------------------------------------------------------------------
 # Change log for LLM prompt
 # ------------------------------------------------------------------
 
 def build_naic_change_log(regulatory_articles):
     """
-    Builds a structured summary of new NAIC LATF items for the LLM.
-    Only processes genuine LATF records (have doc_type key).
-    Regular regulatory news articles are ignored here.
+    Summarises new NAIC LATF items for injection into the LLM prompt.
+    Filters to only genuine LATF records (have a doc_type key).
     """
     latf_items = [i for i in regulatory_articles if "doc_type" in i]
 
