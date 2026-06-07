@@ -5,9 +5,10 @@ from datetime import datetime
 import config
 from market_data import safe_pct, safe_val
 
-# ---------------------------------------------------------------------
-# Tag badge colors
-# ---------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Tag colors
+# ------------------------------------------------------------------
 
 TAG_COLORS = {
     "VALUATION":   "#4F46E5",
@@ -23,11 +24,52 @@ TAG_COLORS = {
     "RESEARCH":    "#4527A0",
 }
 
-# ---------------------------------------------------------------------
-# Markdown → HTML (summary body only)
-# ---------------------------------------------------------------------
 
-def format_llm_summary(text):
+# ------------------------------------------------------------------
+# Display sanitization
+# Applied as the final safety net before any text hits the HTML.
+# Catches any binary / JS content that slipped through upstream.
+# ------------------------------------------------------------------
+
+_GARBAGE_MARKERS = [
+    "%PDF", "PK!\x03", "Content_Types", "(function(w,d,",
+    "window.soutronContext", "gtm.js", "dataLayer",
+    "ApplicationBaseUrl", "<!doctype", "<!DOCTYPE",
+    "<html", "<script",
+]
+
+
+def sanitize_for_display(text: str, fallback: str = "") -> str:
+    """
+    Returns `text` if it looks like clean human-readable content,
+    otherwise returns `fallback`.
+    Binary patterns, raw HTML, and JavaScript are all rejected.
+    """
+    if not text:
+        return fallback
+
+    sample = text[:300]
+
+    for marker in _GARBAGE_MARKERS:
+        if marker in sample:
+            return fallback
+
+    # High density of non-printable chars → binary
+    weird = sum(
+        1 for c in sample
+        if ord(c) > 255 or (ord(c) < 32 and c not in "\t\n\r ")
+    )
+    if sample and (weird / len(sample)) > 0.08:
+        return fallback
+
+    return text
+
+
+# ------------------------------------------------------------------
+# LLM summary → HTML
+# ------------------------------------------------------------------
+
+def format_llm_summary(text: str) -> str:
     lines   = text.split("\n")
     out     = []
     in_list = False
@@ -36,7 +78,7 @@ def format_llm_summary(text):
         line = re.sub(
             r"\*\*(.*?)\*\*",
             r"<strong>\1</strong>",
-            line.strip()
+            line.strip(),
         )
 
         if line.startswith("- ") or line.startswith("* "):
@@ -56,18 +98,16 @@ def format_llm_summary(text):
             if line.startswith("### "):
                 h = line[4:]
                 out.append(
-                    f"<h3 style='color:#0F172A;font-size:15px;"
-                    f"font-weight:700;margin:22px 0 8px 0;"
-                    f"padding-bottom:4px;border-bottom:1px solid #E2E8F0;'>"
-                    f"{h}</h3>"
+                    f"<h3 style='color:#0F172A;font-size:15px;font-weight:700;"
+                    f"margin:22px 0 8px 0;padding-bottom:4px;"
+                    f"border-bottom:1px solid #E2E8F0;'>{h}</h3>"
                 )
             elif line.startswith("## "):
                 h = line[3:]
                 out.append(
-                    f"<h2 style='color:#0F172A;font-size:17px;"
-                    f"font-weight:800;margin:28px 0 10px 0;"
-                    f"padding-bottom:5px;border-bottom:2px solid #CBD5E1;'>"
-                    f"{h}</h2>"
+                    f"<h2 style='color:#0F172A;font-size:17px;font-weight:800;"
+                    f"margin:28px 0 10px 0;padding-bottom:5px;"
+                    f"border-bottom:2px solid #CBD5E1;'>{h}</h2>"
                 )
             elif line:
                 out.append(
@@ -80,15 +120,17 @@ def format_llm_summary(text):
 
     return "".join(out)
 
-# ---------------------------------------------------------------------
-# Market Dashboard
-# ---------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Market dashboard
+# ------------------------------------------------------------------
 
 def _tile(label, value, color="#1E293B"):
+    """Single metric tile — uses class="tile-cell" for mobile CSS."""
     return (
-        f"<td width='33.3%' style='padding:14px 10px;"
-        f"background:#FFFFFF;border:1px solid #E2E8F0;"
-        f"border-radius:6px;text-align:center;"
+        f"<td class='tile-cell' width='33%'"
+        f" style='padding:14px 10px;background:#FFFFFF;"
+        f"border:1px solid #E2E8F0;border-radius:6px;text-align:center;"
         f"box-shadow:0 1px 3px rgba(0,0,0,.04);'>"
         f"<div style='font-size:10px;color:#64748B;font-weight:700;"
         f"text-transform:uppercase;letter-spacing:.6px;'>{label}</div>"
@@ -99,9 +141,11 @@ def _tile(label, value, color="#1E293B"):
 
 
 def _alm(label, value, color="#334155"):
+    """Compact ALM indicator cell."""
     return (
-        f"<td style='padding:10px 14px;text-align:center;"
-        f"border-right:1px solid #E2E8F0;'>"
+        f"<td class='alm-cell'"
+        f" style='padding:10px 14px;text-align:center;"
+        f"border-right:1px solid #E2E8F0;width:25%;'>"
         f"<div style='font-size:10px;color:#64748B;font-weight:600;"
         f"text-transform:uppercase;letter-spacing:.6px;'>{label}</div>"
         f"<div style='font-size:14px;color:{color};font-weight:700;"
@@ -116,17 +160,15 @@ def build_market_dashboard(market):
     sprd = market.get("spread")
     add  = market.get("additional", {})
 
-    spread_val   = (
-        f"{sprd:+.2f}%" if sprd is not None else "N/A"
-    )
+    spread_val   = f"{sprd:+.2f}%" if sprd is not None else "N/A"
     spread_color = (
         "#EF4444" if sprd is not None and sprd < -0.10 else
         "#F59E0B" if sprd is not None and sprd < 0.15  else
         "#10B981"
     )
 
-    ig  = add.get("IG_OAS")         # already in bps after market_data conversion
-    hy  = add.get("HY_OAS")         # already in bps
+    ig  = add.get("IG_OAS")
+    hy  = add.get("HY_OAS")
     be  = add.get("BREAKEVEN_10Y")
     vix = add.get("VIX")
 
@@ -142,7 +184,8 @@ def build_market_dashboard(market):
     )
 
     tiles = (
-        f"<table width='100%' cellpadding='0' cellspacing='0'"
+        # class="tile-row" enables CSS override on mobile
+        f"<table class='tile-row' width='100%' cellpadding='0' cellspacing='0'"
         f" style='border-collapse:separate;border-spacing:6px 6px;"
         f"margin-top:16px;'>"
         f"<tr>"
@@ -157,14 +200,15 @@ def build_market_dashboard(market):
     )
 
     alm_bar = (
-        f"<table width='100%' cellpadding='0' cellspacing='0'"
+        f"<table class='alm-row' width='100%' cellpadding='0' cellspacing='0'"
         f" style='margin-top:8px;background:#F8FAFC;"
         f"border:1px solid #E2E8F0;border-radius:6px;'>"
         f"<tr>"
         f"{_alm('IG OAS',        ig_val)}"
         f"{_alm('HY OAS',        hy_val)}"
         f"{_alm('10Y Breakeven', be_val)}"
-        f"<td style='padding:10px 14px;text-align:center;'>"
+        f"<td class='alm-cell'"
+        f" style='padding:10px 14px;text-align:center;width:25%;'>"
         f"<div style='font-size:10px;color:#64748B;font-weight:600;"
         f"text-transform:uppercase;letter-spacing:.6px;'>VIX</div>"
         f"<div style='font-size:14px;color:{vix_color};font-weight:700;"
@@ -175,9 +219,10 @@ def build_market_dashboard(market):
 
     return tiles + alm_bar
 
-# ---------------------------------------------------------------------
-# Tag Badges
-# ---------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Tag badges
+# ------------------------------------------------------------------
 
 def build_tag_badges(tags):
     out = ""
@@ -193,17 +238,14 @@ def build_tag_badges(tags):
         )
     return out
 
-# ---------------------------------------------------------------------
-# Article Impact Sections
-# ---------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Article impact sections
+# ------------------------------------------------------------------
 
 def build_impact_section(category_buckets, level,
                           min_score=0, require_tags=None):
-    color_map = {
-        "HIGH":   "#DC2626",
-        "MEDIUM": "#D97706",
-        "LOW":    "#059669",
-    }
+    color_map = {"HIGH": "#DC2626", "MEDIUM": "#D97706", "LOW": "#059669"}
     bar_color = color_map[level]
     rows      = ""
 
@@ -230,11 +272,19 @@ def build_impact_section(category_buckets, level,
         for i, a in enumerate(matching[:config.MAX_ARTICLES_PER_SECTION]):
             bg       = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
             tag_html = build_tag_badges(a.get("tags", ["GENERAL"]))
-            snippet  = html_escape(a.get("snippet") or "")
-            title    = html_escape(a.get("title") or "No title")
-            source   = html_escape(a.get("source") or "")
-            date     = html_escape(a.get("date") or "")
-            url      = a.get("url") or "#"
+
+            # Sanitize everything before display — last line of defence
+            title   = sanitize_for_display(
+                html_escape(a.get("title") or ""),
+                fallback=html_escape(a.get("title") or "No title"),
+            )
+            snippet = sanitize_for_display(
+                html_escape(a.get("snippet") or ""),
+                fallback="",
+            )
+            source  = html_escape(a.get("source") or "")
+            date    = html_escape(a.get("date")   or "")
+            url     = a.get("url") or "#"
 
             rows += (
                 f"<tr><td style='padding:16px;background:{bg};"
@@ -255,7 +305,6 @@ def build_impact_section(category_buckets, level,
                 f"</td></tr>"
             )
 
-
     if not rows:
         return ""
 
@@ -270,9 +319,10 @@ def build_impact_section(category_buckets, level,
         f"{rows}</table>"
     )
 
-# ---------------------------------------------------------------------
-# Main Email Builder
-# ---------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# Main email builder
+# ------------------------------------------------------------------
 
 def build_email_html(market_data, category_buckets, llm_summary):
     today     = datetime.utcnow().strftime("%A, %B %d, %Y")
@@ -288,87 +338,162 @@ def build_email_html(market_data, category_buckets, llm_summary):
 
     summary_html = format_llm_summary(llm_summary)
 
+    # ------------------------------------------------------------------
+    # Responsive CSS in <head>
+    # Key fixes for iOS Mail:
+    #   1. x-apple-disable-message-reformatting stops iOS auto-scaling
+    #   2. -webkit-text-size-adjust:100% prevents font boosting
+    #   3. max-width on container instead of fixed width attribute
+    #   4. @media queries make tiles stack on small screens
+    # ------------------------------------------------------------------
+    responsive_css = """
+    <style type="text/css">
+      /* Prevent iOS Mail from scaling down the entire email */
+      body {
+        margin: 0;
+        padding: 0;
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table { border-collapse: collapse; mso-table-lspace: 0; mso-table-rspace: 0; }
+
+      /* Mobile: stack market tiles and expand layout */
+      @media only screen and (max-width: 620px) {
+
+        /* Let the email fill the screen width */
+        .email-wrapper { width: 100% !important; }
+
+        /* Stack each 3-column tile row into single-column */
+        .tile-row, .tile-row tr, .tile-row td,
+        .tile-cell {
+          display: block !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
+        }
+
+        /* ALM bar: 2 columns on mobile (4 → 2×2) */
+        .alm-row td, .alm-cell {
+          display: inline-block !important;
+          width: 49% !important;
+          box-sizing: border-box !important;
+          vertical-align: top !important;
+        }
+
+        /* Comfortable padding on small screens */
+        .email-header   { padding: 20px 16px !important; }
+        .email-market   { padding: 16px !important; }
+        .email-body     { padding: 20px 16px 8px 16px !important; }
+        .email-articles { padding: 8px 16px 24px 16px !important; }
+        .email-footer   { padding: 16px !important; }
+
+        /* Slightly smaller title on mobile */
+        .header-title { font-size: 18px !important; }
+      }
+    </style>
+    """
+
     return f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    Tells iOS Mail NOT to reformat / scale the email.
+    Without this, iOS scales the email down to ~50% on an iPhone.
+  -->
+  <meta name="x-apple-disable-message-reformatting">
   <title>Life &amp; Annuity Intelligence</title>
+  {responsive_css}
 </head>
-<body style="margin:0;padding:24px 8px;background:#F1F5F9;
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+<body style="margin:0;padding:0;background:#F1F5F9;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  -webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-<table width="100%" cellpadding="0" cellspacing="0">
-<tr><td align="center">
-<table width="780" cellpadding="0" cellspacing="0"
-  style="background:#FFFFFF;border-radius:10px;
-  box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden;">
+<!-- Outer centering wrapper — always 100% wide -->
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="background:#F1F5F9;">
+<tr><td align="center" style="padding:16px 8px;">
 
-  <!-- HEADER -->
-  <tr>
-    <td style="background:#0F172A;padding:28px 36px;
-      border-bottom:3px solid #3B82F6;">
-      <div style="color:#F8FAFC;font-size:24px;font-weight:800;
-        letter-spacing:-.3px;">
+  <!-- Inner content container — max 780px, fluid below that -->
+  <table class="email-wrapper" cellpadding="0" cellspacing="0"
+         style="width:100%;max-width:780px;background:#FFFFFF;
+                border-radius:10px;
+                box-shadow:0 4px 20px rgba(0,0,0,.08);">
+
+    <!-- HEADER -->
+    <tr>
+      <td class="email-header"
+          style="background:#0F172A;padding:28px 36px;
+                 border-radius:10px 10px 0 0;
+                 border-bottom:3px solid #3B82F6;">
+        <div class="header-title"
+             style="color:#F8FAFC;font-size:24px;font-weight:800;
+                    letter-spacing:-.3px;">
+          Life &amp; Annuity Actuarial Intelligence
+        </div>
+        <div style="color:#94A3B8;font-size:12px;margin-top:5px;
+                    font-weight:500;letter-spacing:.4px;">
+          Daily Briefing &nbsp;&bull;&nbsp; {today}
+        </div>
+      </td>
+    </tr>
+
+    <!-- MARKET DASHBOARD -->
+    <tr>
+      <td class="email-market"
+          style="padding:20px 36px 24px 36px;background:#F8FAFC;
+                 border-bottom:1px solid #E2E8F0;">
+        {dashboard}
+      </td>
+    </tr>
+
+    <!-- TODAY'S BRIEFING (LLM summary) -->
+    <tr>
+      <td class="email-body" style="padding:32px 36px 8px 36px;">
+        <div style="font-size:20px;font-weight:800;color:#0F172A;
+                    margin-bottom:20px;padding-bottom:10px;
+                    border-bottom:2px solid #E2E8F0;">
+          Today's Briefing
+        </div>
+        {summary_html}
+      </td>
+    </tr>
+
+    <!-- ARTICLE FEED -->
+    <tr>
+      <td class="email-articles" style="padding:8px 36px 36px 36px;">
+        {high}
+        {med}
+        {low}
+      </td>
+    </tr>
+
+    <!-- FOOTER -->
+    <tr>
+      <td class="email-footer"
+          style="background:#F8FAFC;border-top:1px solid #E2E8F0;
+                 border-radius:0 0 10px 10px;
+                 padding:20px 36px;text-align:center;
+                 font-size:11px;color:#64748B;line-height:1.7;">
         Life &amp; Annuity Actuarial Intelligence
-      </div>
-      <div style="color:#94A3B8;font-size:12px;margin-top:5px;
-        font-weight:500;letter-spacing:.4px;">
-        Daily Briefing &nbsp;&bull;&nbsp; {today}
-      </div>
-    </td>
-  </tr>
+        &nbsp;&bull;&nbsp; Daily Briefing<br>
+        <span style="color:#94A3B8;font-size:10px;">
+          Sources: NAIC LATF &nbsp;&bull;&nbsp; SOA
+          &nbsp;&bull;&nbsp; LIMRA &nbsp;&bull;&nbsp; AM Best
+          &nbsp;&bull;&nbsp; Carrier Management
+          &nbsp;&bull;&nbsp; Reinsurance News
+          &nbsp;&bull;&nbsp; Insurance Journal
+          &nbsp;&bull;&nbsp; Milliman
+          &nbsp;&bull;&nbsp; Federal Register
+          &nbsp;&bull;&nbsp; SEC EDGAR
+          &nbsp;&bull;&nbsp; Google News
+        </span>
+      </td>
+    </tr>
 
-  <!-- MARKET DASHBOARD -->
-  <tr>
-    <td style="padding:20px 36px 24px 36px;background:#F8FAFC;
-      border-bottom:1px solid #E2E8F0;">
-      {dashboard}
-    </td>
-  </tr>
-
-  <!-- EXECUTIVE SUMMARY -->
-  <tr>
-    <td style="padding:32px 36px 8px 36px;">
-      <div style="font-size:20px;font-weight:800;color:#0F172A;
-        margin-bottom:20px;padding-bottom:10px;
-        border-bottom:2px solid #E2E8F0;">
-        Today's Briefing
-      </div>
-      {summary_html}
-    </td>
-  </tr>
-
-  <!-- ARTICLE FEED -->
-  <tr>
-    <td style="padding:8px 36px 36px 36px;">
-      {high}
-      {med}
-      {low}
-    </td>
-  </tr>
-
-  <!-- FOOTER -->
-  <tr>
-    <td style="background:#F8FAFC;border-top:1px solid #E2E8F0;
-      padding:20px 36px;text-align:center;
-      font-size:11px;color:#64748B;line-height:1.7;">
-      Life &amp; Annuity Actuarial Intelligence &nbsp;&bull;&nbsp;
-      Daily Briefing<br>
-      <span style="color:#94A3B8;font-size:10px;">
-        Sources: NAIC LATF &nbsp;&bull;&nbsp; SOA &nbsp;&bull;&nbsp;
-        LIMRA &nbsp;&bull;&nbsp; AM Best &nbsp;&bull;&nbsp;
-        The Actuary Magazine &nbsp;&bull;&nbsp; Carrier Management
-        &nbsp;&bull;&nbsp; Reinsurance News &nbsp;&bull;&nbsp;
-        Insurance Journal &nbsp;&bull;&nbsp; Milliman
-        &nbsp;&bull;&nbsp; Federal Register &nbsp;&bull;&nbsp;
-        SEC EDGAR &nbsp;&bull;&nbsp; Google News
-      </span>
-    </td>
-  </tr>
-
-</table>
+  </table>
 </td></tr>
 </table>
+
 </body>
 </html>"""
