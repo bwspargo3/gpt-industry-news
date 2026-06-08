@@ -357,9 +357,26 @@ def filter_noise(articles):
     return filtered
 
 
+
+
 # ------------------------------------------------------------------
 # Score and tag
 # ------------------------------------------------------------------
+
+def classify_event(text: str) -> str:
+    text = text.lower()
+
+    best_event = "OTHER"
+    best_hits = 0
+
+    for event_type, patterns in config.EVENT_PATTERNS.items():
+        hits = sum(1 for p in patterns if p in text)
+
+        if hits > best_hits:
+            best_hits = hits
+            best_event = event_type
+
+    return best_event
 
 def score_and_tag(articles):
     category_buckets = {}
@@ -369,10 +386,12 @@ def score_and_tag(articles):
         score = 0
         tags  = set()
 
-        for kw, weight in config.ACTUARIAL_KEYWORDS.items():
-            if kw in text:
-                score += weight
-
+        event_type = classify_event(text)
+        score = config.EVENT_SCORES.get(event_type, 0)
+        tags.add(event_type)
+        
+        score += SOURCE_WEIGHTS.get(a.get("source"), 0)
+        
         for kw, assigned_tags in config.FUNCTION_TAGS.items():
             if kw in text:
                 tags.update(assigned_tags)
@@ -384,6 +403,9 @@ def score_and_tag(articles):
             ]):
                 score += 20
                 tags.update(["REGULATORY", "VALUATION"])
+                if event_type == "COMMUNITY":
+                    a["score"] = -999
+                    return a
             else:
                 score += 8
                 tags.add("REGULATORY")
@@ -394,6 +416,9 @@ def score_and_tag(articles):
             "LIMRA Newsroom", "AM Best News", "Milliman Insights",
         ):
             score += 5
+            if event_type == "COMMUNITY":
+                a["score"] = -999
+                return a
 
         if a.get("category") == "Carrier Intelligence":
             tags.add("CARRIER")
