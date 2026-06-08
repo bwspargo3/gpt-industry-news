@@ -34,12 +34,6 @@ NEWSAPI_QUERIES = [
 # ------------------------------------------------------------------
 
 DIRECT_RSS_FEEDS = [
-    # Insurance Journal — correct feed URL (lifehealth/ returned 404)
-    (
-        "Trade Press",
-        "Insurance Journal",
-        "https://www.insurancejournal.com/feed/",
-    ),
     # Carrier Management — confirmed working
     (
         "Trade Press",
