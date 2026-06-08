@@ -122,29 +122,93 @@ SEARCH_QUERIES = [
 # Carrier Watchlist Queries
 # ------------------------------------------------------------------
 
+# ------------------------------------------------------------------
+# Carrier Watchlist Queries
+# ------------------------------------------------------------------
+
 CARRIER_SEARCH_QUERIES = [
-    ("Carrier Intelligence", '"Kansas City Life" insurance'),
-    ("Carrier Intelligence", '"Ameritas Life" insurance annuity'),
-    ("Carrier Intelligence", '"Securian Financial" life insurance'),
-    ("Carrier Intelligence", '"Country Financial" life insurance annuity'),
-    ("Carrier Intelligence", '"Business Men\'s Assurance" BMI life'),
-    ("Carrier Intelligence", '"Midland National" life insurance annuity'),
-    ("Carrier Intelligence", '"North American Company" life annuity Sammons'),
-    ("Carrier Intelligence", '"Pacific Life" insurance annuity'),
-    ("Carrier Intelligence", '"Equitable Holdings" life insurance annuity'),
-    ("Carrier Intelligence", '"AIG" life insurance annuity 2026'),
-    ("Carrier Intelligence", '"Brighthouse Financial" annuity life'),
-    ("Carrier Intelligence", '"CNO Financial" OR "Bankers Life" insurance'),
-    ("Carrier Intelligence", '"Global Atlantic" life reinsurance'),
-    ("Carrier Intelligence", '"Protective Life" insurance annuity'),
-    ("Carrier Intelligence", '"Lincoln Financial" life annuity 2026'),
-    ("Carrier Intelligence", '"Transamerica" life insurance annuity 2026'),
-    ("Carrier Intelligence", '"Mutual of Omaha" life insurance 2026'),
-    ("Carrier Intelligence", '"26North" reinsurance life'),
-    ("Carrier Intelligence", '"Sammons Financial" life insurance'),
-    ("Carrier Intelligence", '"Jackson National" life annuity'),
-    ("Carrier Intelligence", '"Principal Financial" life insurance 2026'),
-    ("Carrier Intelligence", '"Nassau Financial" life insurance'),
-    ("Carrier Intelligence", '"Athene" annuity reinsurance 2026'),
-    ("Carrier Intelligence", '"F&G" Fidelity Guaranty life annuity'),
+
+    # Mutuals
+    ("Carrier Intelligence", '"New York Life"'),
+    ("Carrier Intelligence", '"MassMutual"'),
+    ("Carrier Intelligence", '"Northwestern Mutual"'),
+    ("Carrier Intelligence", '"Guardian Life"'),
+    ("Carrier Intelligence", '"Penn Mutual"'),
+    ("Carrier Intelligence", '"Western & Southern"'),
+    ("Carrier Intelligence", '"National Life Group"'),
+
+    # Public Life Insurers
+    ("Carrier Intelligence", '"MetLife"'),
+    ("Carrier Intelligence", '"Prudential Financial"'),
+    ("Carrier Intelligence", '"Lincoln Financial"'),
+    ("Carrier Intelligence", '"Brighthouse Financial"'),
+    ("Carrier Intelligence", '"Corebridge Financial"'),
+    ("Carrier Intelligence", '"Principal Financial"'),
+    ("Carrier Intelligence", '"Equitable Holdings"'),
+
+    # Annuity Leaders
+    ("Carrier Intelligence", '"Athene"'),
+    ("Carrier Intelligence", '"Global Atlantic"'),
+    ("Carrier Intelligence", '"F&G"'),
+    ("Carrier Intelligence", '"Jackson National"'),
+    ("Carrier Intelligence", '"Allianz Life"'),
+    ("Carrier Intelligence", '"Nationwide"'),
+    ("Carrier Intelligence", '"Symetra"'),
+    ("Carrier Intelligence", '"Delaware Life"'),
+    ("Carrier Intelligence", '"Gainbridge"'),
+
+    # Regional / Mutual
+    ("Carrier Intelligence", '"Kansas City Life"'),
+    ("Carrier Intelligence", '"Ameritas"'),
+    ("Carrier Intelligence", '"Securian Financial"'),
+    ("Carrier Intelligence", '"Country Financial"'),
+    ("Carrier Intelligence", '"Mutual of Omaha"'),
+    ("Carrier Intelligence", '"OneAmerica"'),
+    ("Carrier Intelligence", '"Foresters Financial"'),
+    ("Carrier Intelligence", '"American National"'),
+    ("Carrier Intelligence", '"Sagicor Life"'),
+
+    # Sammons
+    ("Carrier Intelligence", '"Midland National"'),
+    ("Carrier Intelligence", '"North American Company"'),
+    ("Carrier Intelligence", '"Sammons Financial"'),
+
+    # PE / Bermuda
+    ("Carrier Intelligence", '"26North"'),
+    ("Carrier Intelligence", '"Fortitude Re"'),
+    ("Carrier Intelligence", '"Resolution Life"'),
+    ("Carrier Intelligence", '"Martello Re"'),
+    ("Carrier Intelligence", '"Aspida"'),
+
+    # Existing
+    ("Carrier Intelligence", '"Protective Life"'),
+    ("Carrier Intelligence", '"Transamerica"'),
+    ("Carrier Intelligence", '"Nassau Financial"'),
+    ("Carrier Intelligence", '"Pacific Life"'),
+    ("Carrier Intelligence", '"CNO Financial"'),
+
+    # Carrier Event Searches
+    ("Carrier Intelligence",
+     'life insurer earnings OR annuity carrier earnings'),
+
+    ("Carrier Intelligence",
+     'life insurance company acquisition'),
+
+    ("Carrier Intelligence",
+     'life insurer reinsurance transaction'),
+
+    ("Carrier Intelligence",
+     'annuity carrier product launch'),
+
+    ("Carrier Intelligence",
+     'life insurer rating action'),
+
+    ("Carrier Intelligence",
+     'life insurance strategic partnership'),
+
+    ("Carrier Intelligence",
+     'life insurance distribution agreement'),
+
+    ("Carrier Intelligence",
+     'life insurer capital management'),
 ]
