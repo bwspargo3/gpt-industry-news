@@ -27,10 +27,10 @@ SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "ActuarialIntelligence/1.0"})
 
 BROWSER_HEADERS = {
-    "User-Agent": "ActuarialIntelligence/1.0",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "User-Agent":      "ActuarialIntelligence/1.0",
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Connection": "keep-alive",
+    "Connection":      "keep-alive",
 }
 
 
@@ -39,17 +39,12 @@ BROWSER_HEADERS = {
 # ------------------------------------------------------------------
 
 def clean_snippet(text: str) -> str:
-    """
-    Strips HTML tags, unescapes HTML entities (&nbsp; etc.),
-    removes non-breaking spaces, normalizes whitespace.
-    """
     if not text:
         return ""
     text = re.sub(r"<[^>]+>", " ", text)
     text = html_lib.unescape(text)
     text = text.replace("\xa0", " ").replace("\u200b", "")
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 
 # ------------------------------------------------------------------
@@ -80,7 +75,6 @@ def fetch_newsapi_bulk(queries):
             "apiKey":   config.NEWSAPI_KEY,
             "pageSize": 25,
         }
-
         try:
             resp = SESSION.get(url, params=params, timeout=15)
             resp.raise_for_status()
@@ -89,12 +83,9 @@ def fetch_newsapi_bulk(queries):
             for item in data.get("articles", []):
                 title    = (item.get("title") or "").strip()
                 url_link = item.get("url") or ""
-
                 if not title:
                     continue
 
-                # Client-side date filter — NewsAPI free tier sometimes
-                # returns articles older than the `from` param
                 pub_date = item.get("publishedAt") or ""
                 try:
                     dt = datetime.fromisoformat(
@@ -104,8 +95,7 @@ def fetch_newsapi_bulk(queries):
                         continue
                     date_str = dt.strftime("%b %d, %Y")
                 except Exception:
-                    # If we can't parse the date, skip — avoids stale content
-                    continue
+                    continue   # skip if we can't parse / verify recency
 
                 key = re.sub(r"[^a-zA-Z0-9]", "", (title + url_link).lower())[:120]
                 if key in seen:
@@ -131,7 +121,7 @@ def fetch_newsapi_bulk(queries):
 
 
 # ------------------------------------------------------------------
-# RSS parser — tolerant of malformed XML, cleans snippets
+# RSS parser
 # ------------------------------------------------------------------
 
 def parse_rss_feed(content, source_name=""):
@@ -195,7 +185,7 @@ def parse_rss_feed(content, source_name=""):
             "url":     link,
             "source":  source_name,
             "date":    date_str,
-            "snippet": clean_snippet(desc)[:400],  # FIXED: was missing unescape
+            "snippet": clean_snippet(desc)[:400],
         })
     return articles
 
@@ -270,7 +260,7 @@ def fetch_edgar_filings():
 # ------------------------------------------------------------------
 
 def collect_news():
-    raw          = []
+    raw           = []
     source_health = {}
 
     def add(category, items, label):
@@ -280,7 +270,8 @@ def collect_news():
             raw.append(a)
 
     print("  NAIC LATF...")
-    add("Regulatory", fetch_naic_latf(), "NAIC LATF")
+    # Pass DAYS_BACK so the scraper filters out documents outside the window
+    add("Regulatory", fetch_naic_latf(days_back=config.DAYS_BACK), "NAIC LATF")
 
     print("  SEC EDGAR...")
     add("SEC Filings", fetch_edgar_filings(), "SEC EDGAR")
@@ -308,7 +299,6 @@ def collect_news():
     if dead:
         print(f"  ⚠ {len(dead)} dead sources")
     print(f"  Total raw: {total} from {len(source_health)} sources")
-
     return raw
 
 
@@ -349,7 +339,6 @@ def filter_noise(articles):
 
     for a in articles:
         a["snippet"] = clean_snippet(a.get("snippet") or "")
-
         text = ((a.get("title") or "") + " " + a["snippet"]).lower()
 
         if any(phrase in text for phrase in NOISE_PHRASES):
@@ -389,10 +378,9 @@ def score_and_tag(articles):
                 tags.update(assigned_tags)
 
         if a.get("source") == "NAIC LATF":
-            # source field now correctly set in naic_latf.py
             if any(k in text for k in [
                 "report", "faq", "study", "memo", "update", "impact",
-                "exposure", "draft",
+                "exposure", "draft", "survey", "review",
             ]):
                 score += 20
                 tags.update(["REGULATORY", "VALUATION"])
@@ -433,22 +421,19 @@ def score_and_tag(articles):
 def summarize_with_groq(category_buckets, market_snapshot):
     client           = Groq(api_key=config.GROQ_API_KEY)
     market_narrative = generate_market_narrative(market_snapshot)
+    naic_delta       = build_naic_change_log(
+        category_buckets.get("Regulatory", [])
+    )
 
     context_lines = []
-
     for cat, articles in category_buckets.items():
-        # FIXED: exclude NAIC LATF from article context — they are already
-        # covered by the NAIC_LATF_DELTA section below. Including them here
-        # caused the LLM to echo "PDF document: X" snippets verbatim.
         top = [
             a for a in articles
             if a.get("score", 0) >= 5
-            and a.get("source") != "NAIC LATF"
+            and a.get("source") != "NAIC LATF"   # covered by naic_delta block
         ][:8]
-
         if not top:
             continue
-
         context_lines.append(f"\n[{cat}]")
         for a in top:
             tags_str = ", ".join(a.get("tags", []))
@@ -464,10 +449,6 @@ def summarize_with_groq(category_buckets, market_snapshot):
         else "No significant developments today."
     )
 
-    naic_delta = build_naic_change_log(
-        category_buckets.get("Regulatory", [])
-    )
-
     prompt = f"""
 You are writing a daily intelligence briefing for life and annuity actuaries.
 This is a news digest — factual summaries only.
@@ -475,13 +456,12 @@ This is a news digest — factual summaries only.
 RULES:
 - Write 1-2 sentences per development summarizing what happened.
 - Factual only. No opinions, no recommendations, no consulting framing.
-- Do NOT echo the article titles or context format back verbatim.
-- Do NOT use section headers like [INDUSTRY], [LIFE], [COMPANY] — use
-  only the section names listed below.
+- Do NOT echo article titles or context format back verbatim.
+- Do NOT use section headers like [INDUSTRY], [LIFE], [COMPANY].
 - If a section has no relevant articles, write "No significant developments."
 - Filter out P&C, health, auto insurance, sports, consumer personal finance,
   and international news not relevant to US life/annuity markets.
-- Only include developments from the ARTICLES and NAIC_LATF sections below.
+- Only include developments from the ARTICLES and NAIC LATF sections below.
   Do not add information from your training data.
 
 MARKET DATA:
@@ -540,6 +520,7 @@ Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 """
 
     try:
+        resp = config.groq_client if hasattr(config, "groq_client") else None
         resp = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.3-70b-versatile",
