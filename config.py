@@ -108,51 +108,105 @@ LOW_IMPACT_ALLOWED_TAGS = [
 # Actuarial keyword scoring
 # ------------------------------------------------------------------
 
-ACTUARIAL_KEYWORDS = {
-    # Regulatory
-    "naic": 6, "latf": 8, "regulation": 4, "actuarial guideline": 7,
+EVENT_PATTERNS = {
+    "REINSURANCE": [
+        "reinsurance",
+        "coinsurance",
+        "funded reinsurance",
+        "ceded",
+        "assumption transaction",
+        "block transaction",
+        "risk transfer",
+    ],
 
-    # Reserving
-    "vm-20": 10, "vm-22": 10, "pbr": 8,
-    "principle based reserving": 10,
-    "reserve": 5, "valuation": 5,
-    "cash flow testing": 6, "asset adequacy": 6,
+    "EARNINGS": [
+        "quarterly results",
+        "earnings",
+        "financial results",
+        "reported results",
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+    ],
 
-    # Accounting
-    "ldti": 8, "asc 944": 8, "fasb": 5,
+    "PRODUCT": [
+        "myga",
+        "fixed indexed annuity",
+        "fia",
+        "rila",
+        "indexed universal life",
+        "iul",
+        "new product",
+        "product launch",
+    ],
 
-    # Capital
-    "risk based capital": 8, "rbc": 7, "rating agency": 5,
+    "CAPITAL": [
+        "risk based capital",
+        "rbc",
+        "capital management",
+        "surplus",
+        "solvency",
+    ],
 
-    # Reinsurance
-    "reinsurance": 7, "bermuda": 4,
+    "REGULATORY": [
+        "naic",
+        "latf",
+        "vm-20",
+        "vm-21",
+        "vm-22",
+        "pbr",
+        "principle based reserving",
+        "actuarial guideline",
+    ],
 
-    # Mortality
-    "mortality": 6, "experience study": 6, "longevity": 5,
+    "RATINGS": [
+        "am best",
+        "fitch",
+        "moodys",
+        "s&p",
+        "outlook revised",
+        "credit rating",
+    ],
 
-    # Annuities
-    "fia": 5, "fixed indexed annuity": 6, "rila": 6, "myga": 5,
+    "MNA": [
+        "acquisition",
+        "merger",
+        "acquire",
+        "purchase",
+        "transaction",
+    ],
 
-    # Products
-    "iul": 5, "indexed universal life": 6, "term insurance": 4,
+    "RESEARCH": [
+        "society of actuaries",
+        "american academy of actuaries",
+        "milliman",
+        "research report",
+        "experience study",
+    ],
 
-    # Investments
-    "private credit": 6, "asset liability management": 7, "alm": 7,
+    "COMMUNITY": [
+        "charity",
+        "community",
+        "volunteer",
+        "foundation",
+        "scholarship",
+        "award",
+        "best workplace",
+        "top employer",
+    ],
+}
 
-    # Research
-    "society of actuaries": 5, "american academy of actuaries": 5,
-
-    # Transactions
-    "acquisition": 5, "transaction": 4,
-
-    # Watchlist carriers
-    "kansas city life": 10, "ameritas": 10, "securian": 10,
-    "midland national": 10, "north american company": 8,
-    "pacific life": 10, "brighthouse": 10, "cno financial": 10,
-    "global atlantic": 10, "protective life": 10, "lincoln financial": 8,
-    "transamerica": 8, "mutual of omaha": 8, "jackson national": 8,
-    "26north": 10, "independent life": 8, "principal financial": 8,
-    "nassau financial": 10, "athene": 8,
+EVENT_SCORES = {
+    "REINSURANCE": 20,
+    "CAPITAL": 18,
+    "REGULATORY": 18,
+    "RATINGS": 16,
+    "EARNINGS": 15,
+    "MNA": 15,
+    "PRODUCT": 12,
+    "RESEARCH": 10,
+    "COMMUNITY": -25,
 }
 
 # ------------------------------------------------------------------
