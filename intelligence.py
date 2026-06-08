@@ -378,24 +378,38 @@ def classify_event(text: str) -> str:
 
     return best_event
 
+# Place this authority dictionary right above score_and_tag() in intelligence.py
+SOURCE_WEIGHTS = {
+    "NAIC LATF": 12,
+    "AM Best News": 10,
+    "SEC EDGAR": 10,
+    "SOA Research Institute": 8,
+    "American Academy of Actuaries": 8,
+    "LIMRA Newsroom": 8,
+    "Reinsurance News": 8,
+    "Carrier Management": 6,
+}
+
 def score_and_tag(articles):
     category_buckets = {}
 
     for a in articles:
         text  = ((a.get("title") or "") + " " + (a.get("snippet") or "")).lower()
-        score = 0
-        tags  = set()
-
+        
+        # 1. Primary Event Scoring & Tag Initialization
         event_type = classify_event(text)
         score = config.EVENT_SCORES.get(event_type, 0)
-        tags.add(event_type)
-        
+        tags = {event_type}
+
+        # 2. Add Source Authority Weight
         score += SOURCE_WEIGHTS.get(a.get("source"), 0)
         
+        # 3. Secondary Function Tagging
         for kw, assigned_tags in config.FUNCTION_TAGS.items():
             if kw in text:
                 tags.update(assigned_tags)
 
+        # 4. NAIC LATF Specific Scoring Modifiers
         if a.get("source") == "NAIC LATF":
             if any(k in text for k in [
                 "report", "faq", "study", "memo", "update", "impact",
@@ -403,13 +417,19 @@ def score_and_tag(articles):
             ]):
                 score += 20
                 tags.update(["REGULATORY", "VALUATION"])
+                
                 if event_type == "COMMUNITY":
                     a["score"] = -999
-                    return a
+                    a["tags"] = ["COMMUNITY"]
+                    a["impact"] = "LOW"
+                    cat = a.get("category", "Other")
+                    category_buckets.setdefault(cat, []).append(a)
+                    continue  # Safely moves to the next article loop, NO 'return a'
             else:
                 score += 8
                 tags.add("REGULATORY")
 
+        # 5. Core Publisher Modifiers
         if a.get("source") in (
             "SOA Research Institute", "SOA News", "The Actuary Magazine",
             "American Academy of Actuaries", "NAIC Newsroom",
@@ -418,11 +438,22 @@ def score_and_tag(articles):
             score += 5
             if event_type == "COMMUNITY":
                 a["score"] = -999
-                return a
+                a["tags"] = ["COMMUNITY"]
+                a["impact"] = "LOW"
+                cat = a.get("category", "Other")
+                category_buckets.setdefault(cat, []).append(a)
+                continue  # Safely moves to the next article loop, NO 'return a'
 
+        # 6. Carrier Intelligence Category Tagging
         if a.get("category") == "Carrier Intelligence":
             tags.add("CARRIER")
 
+        # 7. Tag Set Cleanup
+        # If we found meaningful context tags, remove the generic "OTHER" classification
+        if "OTHER" in tags and len(tags) > 1:
+            tags.discard("OTHER")
+
+        # 8. Save Metrics & Route to Correct Bucket
         a["score"]  = score
         a["tags"]   = sorted(tags) if tags else ["GENERAL"]
         a["impact"] = (
@@ -430,13 +461,16 @@ def score_and_tag(articles):
             "MEDIUM" if score >= config.MEDIUM_IMPACT_THRESHOLD else
             "LOW"
         )
+        
         cat = a.get("category", "Other")
         category_buckets.setdefault(cat, []).append(a)
 
+    # Sort each bucket descending by score
     for cat in category_buckets:
         category_buckets[cat].sort(key=lambda x: x["score"], reverse=True)
 
     return category_buckets
+
 
 
 # ------------------------------------------------------------------
