@@ -482,7 +482,6 @@ def build_email_html(market_data, category_buckets, llm_summary):
           &nbsp;&bull;&nbsp; LIMRA &nbsp;&bull;&nbsp; AM Best
           &nbsp;&bull;&nbsp; Carrier Management
           &nbsp;&bull;&nbsp; Reinsurance News
-          &nbsp;&bull;&nbsp; Insurance Journal
           &nbsp;&bull;&nbsp; Milliman
           &nbsp;&bull;&nbsp; Federal Register
           &nbsp;&bull;&nbsp; SEC EDGAR
