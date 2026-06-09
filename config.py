@@ -37,16 +37,6 @@ MAX_ARTICLES_PER_QUERY   = 25
 MAX_ARTICLES_PER_SECTION = 20
 
 # ------------------------------------------------------------------
-# Cross-day deduplication cache
-# Stores seen article hashes for a rolling 30-day window so the same
-# article never appears in the digest twice across separate runs.
-# Cached in GitHub Actions exactly like the NAIC LATF cache.
-# ------------------------------------------------------------------
-
-SEEN_ARTICLES_CACHE_FILE = "seen_articles_cache.json"
-SEEN_ARTICLES_TTL_DAYS   = 30
-
-# ------------------------------------------------------------------
 # Noise filtering
 # ------------------------------------------------------------------
 
