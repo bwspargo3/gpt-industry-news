@@ -1,5 +1,5 @@
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.2.0
-groq>=0.9.0
 yfinance>=0.2.40
+# groq removed — summarization now uses Gemini 2.0 Flash via REST API (no SDK needed)
