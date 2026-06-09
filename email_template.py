@@ -24,11 +24,11 @@ TAG_COLORS = {
     "RESEARCH":    "#4527A0",
 }
 
+SIGNAL_COLOR = "#B45309"  # Amber — distinct from tag palette
+
 
 # ------------------------------------------------------------------
 # Display sanitization
-# Applied as the final safety net before any text hits the HTML.
-# Catches any binary / JS content that slipped through upstream.
 # ------------------------------------------------------------------
 
 _GARBAGE_MARKERS = [
@@ -40,36 +40,62 @@ _GARBAGE_MARKERS = [
 
 
 def sanitize_for_display(text: str, fallback: str = "") -> str:
-    """
-    Returns `text` if it looks like clean human-readable content,
-    otherwise returns `fallback`.
-    Binary patterns, raw HTML, and JavaScript are all rejected.
-    """
     if not text:
         return fallback
-
     sample = text[:300]
-
     for marker in _GARBAGE_MARKERS:
         if marker in sample:
             return fallback
-
-    # High density of non-printable chars → binary
     weird = sum(
         1 for c in sample
         if ord(c) > 255 or (ord(c) < 32 and c not in "\t\n\r ")
     )
     if sample and (weird / len(sample)) > 0.08:
         return fallback
-
     return text
 
 
 # ------------------------------------------------------------------
 # LLM summary → HTML
+# Extracts "Today's Lead" paragraph first so it can be rendered
+# as a callout box rather than inline prose.
 # ------------------------------------------------------------------
 
+def _extract_lead(text: str) -> tuple[str, str]:
+    """
+    Returns (lead_paragraph, remaining_text).
+    Pulls the content under **Today's Lead** and removes that section
+    from the main summary text so it isn't rendered twice.
+    """
+    pattern = re.compile(
+        r"\*\*Today'?s Lead\*\*\s*\n+(.*?)(?=\n\s*\*\*|\Z)",
+        re.DOTALL | re.IGNORECASE,
+    )
+    m = pattern.search(text)
+    if not m:
+        return "", text
+    lead      = m.group(1).strip()
+    remaining = pattern.sub("", text).strip()
+    return lead, remaining
+
+
 def format_llm_summary(text: str) -> str:
+    lead, text = _extract_lead(text)
+    parts = []
+
+    # Today's Lead callout box
+    if lead:
+        parts.append(
+            f"<div style='background:#EFF6FF;border-left:4px solid #2563EB;"
+            f"border-radius:0 6px 6px 0;padding:16px 20px;margin-bottom:24px;'>"
+            f"<div style='font-size:11px;font-weight:800;color:#2563EB;"
+            f"text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;'>"
+            f"Today's Lead</div>"
+            f"<div style='color:#1E3A5F;font-size:14px;line-height:1.7;'>"
+            f"{html_escape(lead)}</div>"
+            f"</div>"
+        )
+
     lines   = text.split("\n")
     out     = []
     in_list = False
@@ -118,7 +144,8 @@ def format_llm_summary(text: str) -> str:
     if in_list:
         out.append("</ul>")
 
-    return "".join(out)
+    parts.append("".join(out))
+    return "".join(parts)
 
 
 # ------------------------------------------------------------------
@@ -126,7 +153,6 @@ def format_llm_summary(text: str) -> str:
 # ------------------------------------------------------------------
 
 def _tile(label, value, color="#1E293B"):
-    """Single metric tile — uses class="tile-cell" for mobile CSS."""
     return (
         f"<td class='tile-cell' width='33%'"
         f" style='padding:14px 10px;background:#FFFFFF;"
@@ -141,7 +167,6 @@ def _tile(label, value, color="#1E293B"):
 
 
 def _alm(label, value, color="#334155"):
-    """Compact ALM indicator cell."""
     return (
         f"<td class='alm-cell'"
         f" style='padding:10px 14px;text-align:center;"
@@ -184,7 +209,6 @@ def build_market_dashboard(market):
     )
 
     tiles = (
-        # class="tile-row" enables CSS override on mobile
         f"<table class='tile-row' width='100%' cellpadding='0' cellspacing='0'"
         f" style='border-collapse:separate;border-spacing:6px 6px;"
         f"margin-top:16px;'>"
@@ -239,6 +263,88 @@ def build_tag_badges(tags):
     return out
 
 
+def build_signal_badges(signals: list[str]) -> str:
+    """Amber badges for consulting opportunity signal labels."""
+    out = ""
+    for sig in signals:
+        out += (
+            f"<span style='display:inline-block;"
+            f"background:{SIGNAL_COLOR}15;color:{SIGNAL_COLOR};"
+            f"border:1px solid {SIGNAL_COLOR}60;font-size:9px;"
+            f"font-weight:800;padding:2px 8px;margin-right:5px;"
+            f"margin-bottom:4px;border-radius:10px;"
+            f"text-transform:uppercase;letter-spacing:.4px;'>"
+            f"⚑ {html_escape(sig)}</span>"
+        )
+    return out
+
+
+# ------------------------------------------------------------------
+# Opportunity Signals section
+# ------------------------------------------------------------------
+
+def build_opportunity_signals_section(signal_articles: list[dict]) -> str:
+    """
+    Renders a dedicated section for articles with consulting opportunity
+    signals — the business-development layer of the digest.
+    """
+    if not signal_articles:
+        return ""
+
+    rows = ""
+    for i, a in enumerate(signal_articles):
+        bg       = "#FFFBF0" if i % 2 == 0 else "#FEF9EC"
+        signals  = build_signal_badges(a.get("consulting_signals", []))
+        tag_html = build_tag_badges(a.get("tags", ["GENERAL"]))
+
+        title   = sanitize_for_display(
+            html_escape(a.get("title") or ""),
+            fallback=html_escape(a.get("title") or "No title"),
+        )
+        snippet = sanitize_for_display(
+            html_escape(a.get("snippet") or ""),
+            fallback="",
+        )
+        source  = html_escape(a.get("source") or "")
+        date    = html_escape(a.get("date")   or "")
+        url     = a.get("url") or "#"
+
+        rows += (
+            f"<tr><td style='padding:16px;background:{bg};"
+            f"border-bottom:1px solid #FDE68A;border-radius:4px;'>"
+            f"<div style='margin-bottom:5px;'>{signals}</div>"
+            f"<div style='margin-bottom:5px;'>{tag_html}</div>"
+            f"<div style='font-weight:700;font-size:14px;line-height:1.4;'>"
+            f"<a href='{url}' style='color:#92400E;text-decoration:none;'>"
+            f"{title}</a></div>"
+            + (
+                f"<div style='color:#78350F;font-size:13px;"
+                f"margin-top:6px;line-height:1.6;'>{snippet}</div>"
+                if snippet else ""
+            )
+            + f"<div style='color:#B45309;font-size:11px;"
+            f"margin-top:8px;font-weight:600;"
+            f"text-transform:uppercase;letter-spacing:.4px;'>"
+            f"{source}&nbsp;&bull;&nbsp;{date}</div>"
+            f"</td></tr>"
+        )
+
+    count = len(signal_articles)
+    return (
+        f"<table width='100%' cellpadding='0' cellspacing='0'"
+        f" style='margin-top:32px;'>"
+        f"<tr><td style='background:#FEF3C715;color:{SIGNAL_COLOR};"
+        f"padding:12px 18px;font-weight:800;font-size:13px;"
+        f"border-left:4px solid {SIGNAL_COLOR};"
+        f"border-radius:0 4px 4px 0;letter-spacing:.8px;'>"
+        f"⚑ OPPORTUNITY SIGNALS &nbsp;"
+        f"<span style='font-weight:500;font-size:11px;'>"
+        f"({count} potential engagement{'s' if count != 1 else ''} flagged)"
+        f"</span></td></tr>"
+        f"{rows}</table>"
+    )
+
+
 # ------------------------------------------------------------------
 # Article impact sections
 # ------------------------------------------------------------------
@@ -270,10 +376,10 @@ def build_impact_section(category_buckets, level,
         )
 
         for i, a in enumerate(matching[:config.MAX_ARTICLES_PER_SECTION]):
-            bg       = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
-            tag_html = build_tag_badges(a.get("tags", ["GENERAL"]))
+            bg         = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
+            tag_html   = build_tag_badges(a.get("tags", ["GENERAL"]))
+            sig_html   = build_signal_badges(a.get("consulting_signals", []))
 
-            # Sanitize everything before display — last line of defence
             title   = sanitize_for_display(
                 html_escape(a.get("title") or ""),
                 fallback=html_escape(a.get("title") or "No title"),
@@ -289,7 +395,9 @@ def build_impact_section(category_buckets, level,
             rows += (
                 f"<tr><td style='padding:16px;background:{bg};"
                 f"border-bottom:1px solid #F1F5F9;border-radius:4px;'>"
-                f"<div style='margin-bottom:6px;'>{tag_html}</div>"
+                f"<div style='margin-bottom:6px;'>{tag_html}"
+                + (f"{sig_html}" if sig_html else "")
+                + f"</div>"
                 f"<div style='font-weight:700;font-size:14px;line-height:1.4;'>"
                 f"<a href='{url}' style='color:#2563EB;text-decoration:none;'>"
                 f"{title}</a></div>"
@@ -324,7 +432,8 @@ def build_impact_section(category_buckets, level,
 # Main email builder
 # ------------------------------------------------------------------
 
-def build_email_html(market_data, category_buckets, llm_summary):
+def build_email_html(market_data, category_buckets, llm_summary,
+                     signal_articles=None):
     today     = datetime.utcnow().strftime("%A, %B %d, %Y")
     dashboard = build_market_dashboard(market_data)
 
@@ -336,19 +445,11 @@ def build_email_html(market_data, category_buckets, llm_summary):
         require_tags=config.LOW_IMPACT_ALLOWED_TAGS,
     )
 
+    signals_html = build_opportunity_signals_section(signal_articles or [])
     summary_html = format_llm_summary(llm_summary)
 
-    # ------------------------------------------------------------------
-    # Responsive CSS in <head>
-    # Key fixes for iOS Mail:
-    #   1. x-apple-disable-message-reformatting stops iOS auto-scaling
-    #   2. -webkit-text-size-adjust:100% prevents font boosting
-    #   3. max-width on container instead of fixed width attribute
-    #   4. @media queries make tiles stack on small screens
-    # ------------------------------------------------------------------
     responsive_css = """
     <style type="text/css">
-      /* Prevent iOS Mail from scaling down the entire email */
       body {
         margin: 0;
         padding: 0;
@@ -357,13 +458,9 @@ def build_email_html(market_data, category_buckets, llm_summary):
       }
       table { border-collapse: collapse; mso-table-lspace: 0; mso-table-rspace: 0; }
 
-      /* Mobile: stack market tiles and expand layout */
       @media only screen and (max-width: 620px) {
-
-        /* Let the email fill the screen width */
         .email-wrapper { width: 100% !important; }
 
-        /* Stack each 3-column tile row into single-column */
         .tile-row, .tile-row tr, .tile-row td,
         .tile-cell {
           display: block !important;
@@ -371,7 +468,6 @@ def build_email_html(market_data, category_buckets, llm_summary):
           box-sizing: border-box !important;
         }
 
-        /* ALM bar: 2 columns on mobile (4 → 2×2) */
         .alm-row td, .alm-cell {
           display: inline-block !important;
           width: 49% !important;
@@ -379,14 +475,13 @@ def build_email_html(market_data, category_buckets, llm_summary):
           vertical-align: top !important;
         }
 
-        /* Comfortable padding on small screens */
         .email-header   { padding: 20px 16px !important; }
         .email-market   { padding: 16px !important; }
         .email-body     { padding: 20px 16px 8px 16px !important; }
+        .email-signals  { padding: 8px 16px 8px 16px !important; }
         .email-articles { padding: 8px 16px 24px 16px !important; }
         .email-footer   { padding: 16px !important; }
 
-        /* Slightly smaller title on mobile */
         .header-title { font-size: 18px !important; }
       }
     </style>
@@ -397,10 +492,6 @@ def build_email_html(market_data, category_buckets, llm_summary):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!--
-    Tells iOS Mail NOT to reformat / scale the email.
-    Without this, iOS scales the email down to ~50% on an iPhone.
-  -->
   <meta name="x-apple-disable-message-reformatting">
   <title>Life &amp; Annuity Intelligence</title>
   {responsive_css}
@@ -409,12 +500,10 @@ def build_email_html(market_data, category_buckets, llm_summary):
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
   -webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-<!-- Outer centering wrapper — always 100% wide -->
 <table width="100%" cellpadding="0" cellspacing="0"
        style="background:#F1F5F9;">
 <tr><td align="center" style="padding:16px 8px;">
 
-  <!-- Inner content container — max 780px, fluid below that -->
   <table class="email-wrapper" cellpadding="0" cellspacing="0"
          style="width:100%;max-width:780px;background:#FFFFFF;
                 border-radius:10px;
@@ -459,6 +548,15 @@ def build_email_html(market_data, category_buckets, llm_summary):
       </td>
     </tr>
 
+    <!-- OPPORTUNITY SIGNALS -->
+    {"" if not signals_html else f'''
+    <tr>
+      <td class="email-signals" style="padding:8px 36px 8px 36px;">
+        {signals_html}
+      </td>
+    </tr>
+    '''}
+
     <!-- ARTICLE FEED -->
     <tr>
       <td class="email-articles" style="padding:8px 36px 36px 36px;">
@@ -486,6 +584,10 @@ def build_email_html(market_data, category_buckets, llm_summary):
           &nbsp;&bull;&nbsp; Federal Register
           &nbsp;&bull;&nbsp; SEC EDGAR
           &nbsp;&bull;&nbsp; Google News
+        </span><br>
+        <span style="color:#CBD5E1;font-size:10px;">
+          Powered by Gemini 2.0 Flash &nbsp;&bull;&nbsp;
+          Opportunity signals generated automatically — verify before outreach
         </span>
       </td>
     </tr>
