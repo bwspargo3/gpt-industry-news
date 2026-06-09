@@ -1,4 +1,5 @@
 import re
+import json
 import requests
 import xml.etree.ElementTree as ET
 import html as html_lib
@@ -9,10 +10,9 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
-from groq import Groq
 
 import config
-from config import NOISE_PHRASES, SOURCE_MIN_SCORES
+from config import NOISE_PHRASES, NOISE_WHITELIST, SOURCE_MIN_SCORES
 from data_sources import (
     SEARCH_QUERIES,
     CARRIER_SEARCH_QUERIES,
@@ -32,6 +32,81 @@ BROWSER_HEADERS = {
     "Connection":      "keep-alive",
 }
 
+GEMINI_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models"
+    "/gemini-2.0-flash:generateContent"
+)
+
+
+# ------------------------------------------------------------------
+# Cross-day seen-articles cache
+# Guarantees each article appears in the digest exactly once across
+# all runs, regardless of how many days it stays in DAYS_BACK window.
+# Uses the same JSON-on-disk pattern as the NAIC LATF cache.
+# ------------------------------------------------------------------
+
+def _load_seen_cache() -> dict:
+    """Returns {article_key: first_seen_date_str}."""
+    try:
+        with open(config.SEEN_ARTICLES_CACHE_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_seen_cache(cache: dict) -> None:
+    try:
+        with open(config.SEEN_ARTICLES_CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+    except Exception as e:
+        print(f"    Seen-articles cache save error: {e}")
+
+
+def _prune_seen_cache(cache: dict) -> dict:
+    """Drop entries older than SEEN_ARTICLES_TTL_DAYS."""
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=config.SEEN_ARTICLES_TTL_DAYS)
+    ).strftime("%Y-%m-%d")
+    return {k: v for k, v in cache.items() if v >= cutoff}
+
+
+def _article_key(article: dict) -> str:
+    title = (article.get("title") or "").lower()
+    url   = (article.get("url")   or "").lower()
+    return re.sub(r"[^a-z0-9]", "", title + url)[:140]
+
+
+def filter_already_seen(articles: list[dict]) -> tuple[list[dict], int]:
+    """
+    Removes articles already delivered in a previous run.
+    Returns (new_articles, suppressed_count).
+    Updates and persists the cache with today's new articles.
+    """
+    cache   = _load_seen_cache()
+    cache   = _prune_seen_cache(cache)
+    today   = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new     = []
+    skipped = 0
+
+    for a in articles:
+        key = _article_key(a)
+        if not key:
+            new.append(a)
+            continue
+        if key in cache:
+            skipped += 1
+        else:
+            cache[key] = today
+            new.append(a)
+
+    _save_seen_cache(cache)
+    return new, skipped
+
+
+# ------------------------------------------------------------------
+# Text utilities
+# ------------------------------------------------------------------
+
 def clean_snippet(text: str) -> str:
     if not text:
         return ""
@@ -39,6 +114,11 @@ def clean_snippet(text: str) -> str:
     text = html_lib.unescape(text)
     text = text.replace("\xa0", " ").replace("\u200b", "")
     return re.sub(r"\s+", " ", text).strip()
+
+
+# ------------------------------------------------------------------
+# Data collection
+# ------------------------------------------------------------------
 
 def fetch_newsapi_bulk(queries):
     if not config.NEWSAPI_KEY:
@@ -77,14 +157,12 @@ def fetch_newsapi_bulk(queries):
 
                 pub_date = item.get("publishedAt") or ""
                 try:
-                    dt = datetime.fromisoformat(
-                        pub_date.replace("Z", "+00:00")
-                    )
+                    dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
                     if dt < cutoff:
                         continue
                     date_str = dt.strftime("%b %d, %Y")
                 except Exception:
-                    continue   
+                    continue
 
                 key = re.sub(r"[^a-zA-Z0-9]", "", (title + url_link).lower())[:120]
                 if key in seen:
@@ -108,6 +186,7 @@ def fetch_newsapi_bulk(queries):
 
     return all_articles
 
+
 def parse_rss_feed(content, source_name=""):
     cutoff   = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=config.DAYS_BACK)
     articles = []
@@ -121,8 +200,8 @@ def parse_rss_feed(content, source_name=""):
         )
     except ET.ParseError:
         try:
-            soup   = BeautifulSoup(content, "lxml-xml")
-            items  = soup.find_all("item")
+            soup  = BeautifulSoup(content, "lxml-xml")
+            items = soup.find_all("item")
             result = []
             for item in items[:config.MAX_ARTICLES_PER_QUERY]:
                 t  = item.find("title")
@@ -173,6 +252,7 @@ def parse_rss_feed(content, source_name=""):
         })
     return articles
 
+
 def fetch_direct_rss(url, source_name):
     try:
         resp = SESSION.get(url, headers=BROWSER_HEADERS, timeout=15)
@@ -181,6 +261,7 @@ def fetch_direct_rss(url, source_name):
     except Exception as e:
         print(f"    RSS error [{source_name}]: {e}")
         return []
+
 
 def fetch_google_news(query):
     url = (
@@ -195,10 +276,12 @@ def fetch_google_news(query):
         print(f"    Google News error [{query[:50]}]: {e}")
         return []
 
+
 LIFE_KEYWORDS = [
     "life insurance", "annuity", "reinsurance",
     "life insurer", "insurance holding", "long term care",
 ]
+
 
 def fetch_edgar_filings():
     articles = []
@@ -229,6 +312,7 @@ def fetch_edgar_filings():
     except Exception as e:
         print(f"    EDGAR error: {e}")
     return articles
+
 
 def collect_news():
     raw           = []
@@ -271,6 +355,11 @@ def collect_news():
     print(f"  Total raw: {total} from {len(source_health)} sources")
     return raw
 
+
+# ------------------------------------------------------------------
+# Deduplication (within-run)
+# ------------------------------------------------------------------
+
 def deduplicate_articles(articles):
     seen   = set()
     unique = []
@@ -284,6 +373,11 @@ def deduplicate_articles(articles):
         unique.append(a)
     print(f"  Deduplicated: {len(articles)} → {len(unique)}")
     return unique
+
+
+# ------------------------------------------------------------------
+# Noise filter — now with whitelist override
+# ------------------------------------------------------------------
 
 def filter_noise(articles):
     filtered = []
@@ -300,9 +394,11 @@ def filter_noise(articles):
         a["snippet"] = clean_snippet(a.get("snippet") or "")
         text = ((a.get("title") or "") + " " + a["snippet"]).lower()
 
-        if any(phrase in text for phrase in NOISE_PHRASES):
-            dropped += 1
-            continue
+        # Whitelist check: if any override phrase present, never drop
+        if not any(phrase in text for phrase in NOISE_WHITELIST):
+            if any(phrase in text for phrase in NOISE_PHRASES):
+                dropped += 1
+                continue
 
         min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
         if min_hits > 0:
@@ -315,57 +411,73 @@ def filter_noise(articles):
     print(f"  Noise filter: dropped {dropped}, kept {len(filtered)}")
     return filtered
 
+
+# ------------------------------------------------------------------
+# Scoring and tagging
+# ------------------------------------------------------------------
+
 def classify_event(text: str) -> str:
     text = text.lower()
     best_event = "OTHER"
-    best_hits = 0
-
+    best_hits  = 0
     for event_type, patterns in config.EVENT_PATTERNS.items():
         hits = sum(1 for p in patterns if p in text)
         if hits > best_hits:
-            best_hits = hits
+            best_hits  = hits
             best_event = event_type
-
     return best_event
 
+
 SOURCE_WEIGHTS = {
-    "NAIC LATF": 12,
-    "AM Best News": 10,
-    "SEC EDGAR": 10,
-    "SOA Research Institute": 8,
+    "NAIC LATF":                    12,
+    "AM Best News":                 10,
+    "SEC EDGAR":                    10,
+    "SOA Research Institute":        8,
     "American Academy of Actuaries": 8,
-    "LIMRA Newsroom": 8,
-    "Reinsurance News": 8,
-    "Carrier Management": 6,
+    "LIMRA Newsroom":                8,
+    "Reinsurance News":              8,
+    "Carrier Management":            6,
 }
+
+
+def _detect_consulting_signals(text: str) -> list[str]:
+    """Returns a list of matched consulting signal labels for display."""
+    text   = text.lower()
+    hits   = []
+    for label, patterns in config.CONSULTING_SIGNALS.items():
+        if any(p in text for p in patterns):
+            hits.append(label)
+    return hits
+
 
 def score_and_tag(articles):
     category_buckets = {}
 
     for a in articles:
-        text  = ((a.get("title") or "") + " " + (a.get("snippet") or "")).lower()
-        
+        text = ((a.get("title") or "") + " " + (a.get("snippet") or "")).lower()
+
         event_type = classify_event(text)
-        score = config.EVENT_SCORES.get(event_type, 0)
-        tags = {event_type}
+        score      = config.EVENT_SCORES.get(event_type, 0)
+        tags       = {event_type}
 
         score += SOURCE_WEIGHTS.get(a.get("source"), 0)
-        
+
         for kw, assigned_tags in config.FUNCTION_TAGS.items():
             if kw in text:
                 tags.update(assigned_tags)
 
         if a.get("source") == "NAIC LATF":
-            if any(k in text for k in ["report", "faq", "study", "memo", "update", "impact", "exposure", "draft", "survey", "review"]):
+            if any(k in text for k in ["report", "faq", "study", "memo", "update",
+                                        "impact", "exposure", "draft", "survey", "review"]):
                 score += 20
                 tags.update(["REGULATORY", "VALUATION"])
                 if event_type == "COMMUNITY":
-                    a["score"] = -999
-                    a["tags"] = ["COMMUNITY"]
-                    a["impact"] = "LOW"
-                    cat = a.get("category", "Other")
-                    category_buckets.setdefault(cat, []).append(a)
-                    continue  
+                    a["score"]             = -999
+                    a["tags"]              = ["COMMUNITY"]
+                    a["impact"]            = "LOW"
+                    a["consulting_signals"] = []
+                    category_buckets.setdefault(a.get("category", "Other"), []).append(a)
+                    continue
             else:
                 score += 8
                 tags.add("REGULATORY")
@@ -377,12 +489,12 @@ def score_and_tag(articles):
         ):
             score += 5
             if event_type == "COMMUNITY":
-                a["score"] = -999
-                a["tags"] = ["COMMUNITY"]
-                a["impact"] = "LOW"
-                cat = a.get("category", "Other")
-                category_buckets.setdefault(cat, []).append(a)
-                continue  
+                a["score"]             = -999
+                a["tags"]              = ["COMMUNITY"]
+                a["impact"]            = "LOW"
+                a["consulting_signals"] = []
+                category_buckets.setdefault(a.get("category", "Other"), []).append(a)
+                continue
 
         if a.get("category") == "Carrier Intelligence":
             tags.add("CARRIER")
@@ -390,28 +502,69 @@ def score_and_tag(articles):
         if "OTHER" in tags and len(tags) > 1:
             tags.discard("OTHER")
 
-        a["score"]  = score
-        a["tags"]   = sorted(list(tags)) if tags else ["GENERAL"]
-        a["impact"] = (
+        # Detect and attach consulting opportunity signals
+        signals = _detect_consulting_signals(text)
+        if signals:
+            score += 3  # Small boost — signals are high-quality articles
+
+        a["score"]             = score
+        a["tags"]              = sorted(list(tags)) if tags else ["GENERAL"]
+        a["consulting_signals"] = signals
+        a["impact"]            = (
             "HIGH"   if score >= config.HIGH_IMPACT_THRESHOLD   else
             "MEDIUM" if score >= config.MEDIUM_IMPACT_THRESHOLD else
             "LOW"
         )
-        
-        cat = a.get("category", "Other")
-        category_buckets.setdefault(cat, []).append(a)
+
+        category_buckets.setdefault(a.get("category", "Other"), []).append(a)
 
     for cat in category_buckets:
         category_buckets[cat].sort(key=lambda x: x["score"], reverse=True)
 
     return category_buckets
 
-def summarize_with_groq(category_buckets, market_snapshot):
-    client           = Groq(api_key=config.GROQ_API_KEY)
+
+# ------------------------------------------------------------------
+# Consulting signals extraction (for email template)
+# ------------------------------------------------------------------
+
+def extract_opportunity_signals(category_buckets: dict) -> list[dict]:
+    """
+    Returns a flat list of high-signal articles sorted by score,
+    for the dedicated Opportunity Signals section in the email.
+    De-duplicated — each article appears at most once here.
+    """
+    seen = set()
+    hits = []
+    for articles in category_buckets.values():
+        for a in articles:
+            if not a.get("consulting_signals"):
+                continue
+            key = _article_key(a)
+            if key in seen:
+                continue
+            seen.add(key)
+            hits.append(a)
+    hits.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return hits[:15]  # Cap at 15 to keep the section tight
+
+
+# ------------------------------------------------------------------
+# Gemini summarization
+# ------------------------------------------------------------------
+
+def summarize_with_gemini(category_buckets: dict, market_snapshot: dict) -> str:
+    """
+    Calls Gemini 2.0 Flash via the REST API (no SDK required).
+    Falls back to a plain-text digest if the API call fails.
+    """
     market_narrative = generate_market_narrative(market_snapshot)
     naic_delta       = build_naic_change_log(category_buckets.get("Regulatory", []))
 
+    # Build numbered article list so the model can cite sources
     context_lines = []
+    article_index = 1
+
     for cat, articles in category_buckets.items():
         top = [
             a for a in articles
@@ -426,74 +579,119 @@ def summarize_with_groq(category_buckets, market_snapshot):
             snippet  = (a.get("snippet") or "")[:200]
             source   = a.get("source") or "Unknown"
             context_lines.append(
-                f"- [{tags_str}] {a.get('title', '')} ({source})"
-                + (f"\n  {snippet}" if snippet else "")
+                f"[{article_index}] [{tags_str}] {a.get('title', '')} ({source})"
+                + (f"\n    {snippet}" if snippet else "")
             )
+            article_index += 1
 
     news_context = "\n".join(context_lines) if context_lines else "No significant developments today."
 
-    prompt = f"""
-You are writing a daily intelligence briefing for life and annuity actuaries.
-This is a news digest — factual summaries only.
+    prompt = f"""You are writing a daily intelligence briefing for senior life and annuity actuaries
+and insurance executives.
 
-RULES:
-- Write 1-2 sentences per development summarizing what happened.
-- Factual only. No opinions, no recommendations, no consulting framing.
-- Do NOT echo article titles or context format back verbatim.
-- Do NOT use section headers like [INDUSTRY], [LIFE], [COMPANY].
-- If a section has no relevant articles, write "No significant developments."
-- Filter out P&C, health, auto insurance, sports, consumer personal finance,
-  and international news not relevant to US life/annuity markets.
-- Only include developments from the ARTICLES and NAIC LATF sections below.
+STRICT RULES — follow every one exactly:
+1. One to two sentences per development. State facts only.
+2. Never invent, infer, or extrapolate beyond what the articles say.
+3. If you reference a specific fact, note the article number in brackets, e.g. [3].
+4. Do NOT echo article titles verbatim. Restate in plain professional language.
+5. Omit any section with no relevant articles — write "No significant developments."
+6. Exclude P&C, health, auto insurance, sports, consumer personal finance,
+   and non-US market news unless directly relevant to US life/annuity actuaries.
+7. Use **Section Name** markdown for headers. No other markdown.
 
-MARKET DATA:
+MARKET DATA (authoritative — always include exact numbers):
 {market_narrative}
 
-NAIC LATF NEW DOCUMENTS:
+NAIC LATF NEW DOCUMENTS (include all in Valuation & Reserving):
 {naic_delta}
 
-ARTICLES:
+ARTICLES (cite by number):
 {news_context}
 
-Write sections using **Section Name** as the header.
+---
+Write the following sections in order. Skip any section with no content.
+
 **Market Pulse**
-2-3 sentences on today's rate and spread levels. State the numbers plainly.
+State today's Treasury yield levels, SOFR, 2Y/10Y spread, and any notable
+spread or volatility context relevant to life/annuity pricing and ALM.
+
+**Today's Lead**
+One paragraph. The single most important development of the day for a CRO
+or CFO of a mid-size US life carrier. Why it matters in plain language.
+
 **Valuation & Reserving**
 VM-20, VM-22, PBR, asset adequacy, LDTI, actuarial guidelines.
-Include any new NAIC LATF documents from the section above.
+Include all new NAIC LATF documents listed above.
+
 **Regulatory Developments**
-NAIC, LATF, state departments, IRS/DOL.
+NAIC, LATF, state departments, IRS/DOL rulings.
+
 **Accounting & LDTI**
-ASC 944, FASB, LDTI implementation.
+ASC 944, FASB, LDTI implementation updates.
+
 **Mortality & Experience Studies**
-SOA/AAA research, mortality, experience studies, GLP-1 implications.
+SOA/AAA research, mortality trends, experience studies, GLP-1 developments.
+
 **Reinsurance Market**
-Transactions, Bermuda, M&A involving reinsurers or life carriers.
+Transactions, Bermuda activity, block deals, M&A involving reinsurers.
+
 **Capital & Risk**
-RBC, rating agency actions on life/annuity carriers.
+RBC actions, rating agency decisions on life/annuity carriers.
+
 **Annuity Market**
-FIA, RILA, MYGA sales data, product news, hedging developments.
+FIA, RILA, MYGA sales data, product news, hedging activity.
+
 **Life Product Developments**
-IUL, term, whole life pricing, filings, AG 49.
+IUL, term, whole life pricing, regulatory filings, AG 49.
+
 **Investments & ALM**
-Private credit, structured assets, insurer investment and ALM news.
+Private credit, structured assets, insurer portfolio and ALM news.
+
 **Industry Trends**
 AI in insurance, PE consolidation, distribution shifts, longevity trends.
+
 **Carrier Intelligence**
-Named carrier news only. One sentence per carrier. Omit carriers with no news.
+One sentence per named carrier only. Omit carriers with no news today.
+
 **SOA / AAA Research**
 New publications and research releases.
+
 **Consulting & Research**
 Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 """
+
     try:
-        resp = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-            temperature=0.1,
-            max_tokens=3000,
+        resp = requests.post(
+            GEMINI_ENDPOINT,
+            params={"key": config.GEMINI_API_KEY},
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature":     0.1,
+                    "maxOutputTokens": 4096,
+                },
+            },
+            timeout=60,
         )
-        return resp.choices[0].message.content
+        resp.raise_for_status()
+        data = resp.json()
+        return (
+            data["candidates"][0]["content"]["parts"][0]["text"]
+        )
     except Exception as e:
-        print(f"    Groq error: {e}")
-        return "Briefing unavailable."
+        print(f"    Gemini error: {e}")
+        # Graceful fallback — build a minimal plain-text briefing
+        return _fallback_briefing(market_narrative, naic_delta)
+
+
+def _fallback_briefing(market_narrative: str, naic_delta: str) -> str:
+    """Minimal plain-text briefing used if Gemini is unavailable."""
+    return (
+        "**Market Pulse**\n"
+        f"{market_narrative}\n\n"
+        "**NAIC LATF**\n"
+        f"{naic_delta}\n\n"
+        "_Full AI briefing unavailable — Gemini API call failed. "
+        "Article feed below contains all collected developments._"
+    )
