@@ -26,11 +26,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ---------------------------------------------------------------
-      # NAIC LATF document cache
       # Persists resolved document dates so we don't re-fetch PDF
       # headers and HTTP metadata on every run.
-      # ---------------------------------------------------------------
       - name: Restore NAIC LATF cache
         uses: actions/cache@v4
         with:
@@ -38,19 +35,6 @@ jobs:
           key: naic-latf-cache-${{ github.run_id }}
           restore-keys: |
             naic-latf-cache-
-
-      # ---------------------------------------------------------------
-      # Seen-articles cache
-      # Guarantees each article appears in the digest exactly once
-      # across all runs (rolling 30-day window).
-      # ---------------------------------------------------------------
-      - name: Restore seen-articles cache
-        uses: actions/cache@v4
-        with:
-          path: seen_articles_cache.json
-          key: seen-articles-cache-${{ github.run_id }}
-          restore-keys: |
-            seen-articles-cache-
 
       - name: Run digest
         env:
@@ -67,13 +51,6 @@ jobs:
         with:
           path: naic_latf_cache.json
           key: naic-latf-cache-${{ github.run_id }}
-
-      - name: Save seen-articles cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: seen_articles_cache.json
-          key: seen-articles-cache-${{ github.run_id }}
 
       - name: Notify on failure
         if: failure()
