@@ -6,7 +6,7 @@ import config
 from intelligence import (
     collect_news,
     deduplicate_articles,
-    filter_already_seen,
+    filter_last_24h,
     filter_noise,
     score_and_tag,
     summarize_with_gemini,
@@ -44,10 +44,10 @@ def main():
     print("[4] Filtering noise...")
     filtered = filter_noise(unique)
 
-    print("[5] Filtering already-seen articles (cross-day)...")
-    fresh, suppressed = filter_already_seen(filtered)
-    print(f"    {suppressed} articles suppressed (already delivered). "
-          f"{len(fresh)} new articles proceeding.")
+    print("[5] Filtering to last 24 hours...")
+    fresh, dropped = filter_last_24h(filtered)
+    print(f"    Kept {len(fresh)} articles published today/yesterday "
+          f"({dropped} older articles dropped).")
 
     print("[6] Scoring and tagging...")
     buckets = score_and_tag(fresh)
