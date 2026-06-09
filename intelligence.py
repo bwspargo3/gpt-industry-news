@@ -3,10 +3,10 @@ import requests
 import xml.etree.ElementTree as ET
 import html as html_lib
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from email.utils import parsedate_to_datetime
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus
 
 from bs4 import BeautifulSoup
 from groq import Groq
@@ -22,7 +22,6 @@ from data_sources import (
 from market_data import generate_market_narrative
 from naic_latf import fetch_naic_latf, build_naic_change_log
 
-
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "ActuarialIntelligence/1.0"})
 
@@ -33,11 +32,6 @@ BROWSER_HEADERS = {
     "Connection":      "keep-alive",
 }
 
-
-# ------------------------------------------------------------------
-# Snippet cleaning
-# ------------------------------------------------------------------
-
 def clean_snippet(text: str) -> str:
     if not text:
         return ""
@@ -46,16 +40,11 @@ def clean_snippet(text: str) -> str:
     text = text.replace("\xa0", " ").replace("\u200b", "")
     return re.sub(r"\s+", " ", text).strip()
 
-
-# ------------------------------------------------------------------
-# NewsAPI
-# ------------------------------------------------------------------
-
 def fetch_newsapi_bulk(queries):
     if not config.NEWSAPI_KEY:
         return []
 
-    cutoff    = datetime.utcnow() - timedelta(days=config.DAYS_BACK)
+    cutoff    = datetime.now(timezone.utc) - timedelta(days=config.DAYS_BACK)
     from_date = cutoff.strftime("%Y-%m-%d")
     url       = "https://newsapi.org/v2/everything"
 
@@ -90,12 +79,12 @@ def fetch_newsapi_bulk(queries):
                 try:
                     dt = datetime.fromisoformat(
                         pub_date.replace("Z", "+00:00")
-                    ).replace(tzinfo=None)
+                    )
                     if dt < cutoff:
                         continue
                     date_str = dt.strftime("%b %d, %Y")
                 except Exception:
-                    continue   # skip if we can't parse / verify recency
+                    continue   
 
                 key = re.sub(r"[^a-zA-Z0-9]", "", (title + url_link).lower())[:120]
                 if key in seen:
@@ -119,13 +108,8 @@ def fetch_newsapi_bulk(queries):
 
     return all_articles
 
-
-# ------------------------------------------------------------------
-# RSS parser
-# ------------------------------------------------------------------
-
 def parse_rss_feed(content, source_name=""):
-    cutoff   = datetime.utcnow() - timedelta(days=config.DAYS_BACK)
+    cutoff   = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=config.DAYS_BACK)
     articles = []
 
     try:
@@ -189,7 +173,6 @@ def parse_rss_feed(content, source_name=""):
         })
     return articles
 
-
 def fetch_direct_rss(url, source_name):
     try:
         resp = SESSION.get(url, headers=BROWSER_HEADERS, timeout=15)
@@ -198,7 +181,6 @@ def fetch_direct_rss(url, source_name):
     except Exception as e:
         print(f"    RSS error [{source_name}]: {e}")
         return []
-
 
 def fetch_google_news(query):
     url = (
@@ -213,16 +195,10 @@ def fetch_google_news(query):
         print(f"    Google News error [{query[:50]}]: {e}")
         return []
 
-
-# ------------------------------------------------------------------
-# SEC EDGAR
-# ------------------------------------------------------------------
-
 LIFE_KEYWORDS = [
     "life insurance", "annuity", "reinsurance",
     "life insurer", "insurance holding", "long term care",
 ]
-
 
 def fetch_edgar_filings():
     articles = []
@@ -246,18 +222,13 @@ def fetch_edgar_filings():
                 "title":    title,
                 "url":      link.get("href") if link is not None else "",
                 "source":   "SEC EDGAR",
-                "date":     datetime.utcnow().strftime("%b %d, %Y"),
+                "date":     datetime.now(timezone.utc).strftime("%b %d, %Y"),
                 "snippet":  clean_snippet(summary)[:400],
                 "category": "SEC Filings",
             })
     except Exception as e:
         print(f"    EDGAR error: {e}")
     return articles
-
-
-# ------------------------------------------------------------------
-# Collect all news
-# ------------------------------------------------------------------
 
 def collect_news():
     raw           = []
@@ -270,7 +241,6 @@ def collect_news():
             raw.append(a)
 
     print("  NAIC LATF...")
-    # Pass DAYS_BACK so the scraper filters out documents outside the window
     add("Regulatory", fetch_naic_latf(days_back=config.DAYS_BACK), "NAIC LATF")
 
     print("  SEC EDGAR...")
@@ -301,11 +271,6 @@ def collect_news():
     print(f"  Total raw: {total} from {len(source_health)} sources")
     return raw
 
-
-# ------------------------------------------------------------------
-# Deduplication
-# ------------------------------------------------------------------
-
 def deduplicate_articles(articles):
     seen   = set()
     unique = []
@@ -320,21 +285,15 @@ def deduplicate_articles(articles):
     print(f"  Deduplicated: {len(articles)} → {len(unique)}")
     return unique
 
-
-# ------------------------------------------------------------------
-# Noise filter
-# ------------------------------------------------------------------
-
 def filter_noise(articles):
     filtered = []
     dropped  = 0
-
     life_kws = [
         "life insurance", "annuity", "actuari", "reserve", "valuation",
         "reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
         "mortality", "fia", "rila", "iul", "alm", "capital",
         "hedging", "policyholder", "myga", "solvency",
-        "life insurer", "life reinsurance",
+        "life insurer", "life reinsurance", "pia", "personal income annuity",
     ]
 
     for a in articles:
@@ -356,29 +315,19 @@ def filter_noise(articles):
     print(f"  Noise filter: dropped {dropped}, kept {len(filtered)}")
     return filtered
 
-
-
-
-# ------------------------------------------------------------------
-# Score and tag
-# ------------------------------------------------------------------
-
 def classify_event(text: str) -> str:
     text = text.lower()
-
     best_event = "OTHER"
     best_hits = 0
 
     for event_type, patterns in config.EVENT_PATTERNS.items():
         hits = sum(1 for p in patterns if p in text)
-
         if hits > best_hits:
             best_hits = hits
             best_event = event_type
 
     return best_event
 
-# Place this authority dictionary right above score_and_tag() in intelligence.py
 SOURCE_WEIGHTS = {
     "NAIC LATF": 12,
     "AM Best News": 10,
@@ -396,40 +345,31 @@ def score_and_tag(articles):
     for a in articles:
         text  = ((a.get("title") or "") + " " + (a.get("snippet") or "")).lower()
         
-        # 1. Primary Event Scoring & Tag Initialization
         event_type = classify_event(text)
         score = config.EVENT_SCORES.get(event_type, 0)
         tags = {event_type}
 
-        # 2. Add Source Authority Weight
         score += SOURCE_WEIGHTS.get(a.get("source"), 0)
         
-        # 3. Secondary Function Tagging
         for kw, assigned_tags in config.FUNCTION_TAGS.items():
             if kw in text:
                 tags.update(assigned_tags)
 
-        # 4. NAIC LATF Specific Scoring Modifiers
         if a.get("source") == "NAIC LATF":
-            if any(k in text for k in [
-                "report", "faq", "study", "memo", "update", "impact",
-                "exposure", "draft", "survey", "review",
-            ]):
+            if any(k in text for k in ["report", "faq", "study", "memo", "update", "impact", "exposure", "draft", "survey", "review"]):
                 score += 20
                 tags.update(["REGULATORY", "VALUATION"])
-                
                 if event_type == "COMMUNITY":
                     a["score"] = -999
                     a["tags"] = ["COMMUNITY"]
                     a["impact"] = "LOW"
                     cat = a.get("category", "Other")
                     category_buckets.setdefault(cat, []).append(a)
-                    continue  # Safely moves to the next article loop, NO 'return a'
+                    continue  
             else:
                 score += 8
                 tags.add("REGULATORY")
 
-        # 5. Core Publisher Modifiers
         if a.get("source") in (
             "SOA Research Institute", "SOA News", "The Actuary Magazine",
             "American Academy of Actuaries", "NAIC Newsroom",
@@ -442,20 +382,16 @@ def score_and_tag(articles):
                 a["impact"] = "LOW"
                 cat = a.get("category", "Other")
                 category_buckets.setdefault(cat, []).append(a)
-                continue  # Safely moves to the next article loop, NO 'return a'
+                continue  
 
-        # 6. Carrier Intelligence Category Tagging
         if a.get("category") == "Carrier Intelligence":
             tags.add("CARRIER")
 
-        # 7. Tag Set Cleanup
-        # If we found meaningful context tags, remove the generic "OTHER" classification
         if "OTHER" in tags and len(tags) > 1:
             tags.discard("OTHER")
 
-        # 8. Save Metrics & Route to Correct Bucket
         a["score"]  = score
-        a["tags"]   = sorted(tags) if tags else ["GENERAL"]
+        a["tags"]   = sorted(list(tags)) if tags else ["GENERAL"]
         a["impact"] = (
             "HIGH"   if score >= config.HIGH_IMPACT_THRESHOLD   else
             "MEDIUM" if score >= config.MEDIUM_IMPACT_THRESHOLD else
@@ -465,31 +401,22 @@ def score_and_tag(articles):
         cat = a.get("category", "Other")
         category_buckets.setdefault(cat, []).append(a)
 
-    # Sort each bucket descending by score
     for cat in category_buckets:
         category_buckets[cat].sort(key=lambda x: x["score"], reverse=True)
 
     return category_buckets
 
-
-
-# ------------------------------------------------------------------
-# Groq summary
-# ------------------------------------------------------------------
-
 def summarize_with_groq(category_buckets, market_snapshot):
     client           = Groq(api_key=config.GROQ_API_KEY)
     market_narrative = generate_market_narrative(market_snapshot)
-    naic_delta       = build_naic_change_log(
-        category_buckets.get("Regulatory", [])
-    )
+    naic_delta       = build_naic_change_log(category_buckets.get("Regulatory", []))
 
     context_lines = []
     for cat, articles in category_buckets.items():
         top = [
             a for a in articles
             if a.get("score", 0) >= 5
-            and a.get("source") != "NAIC LATF"   # covered by naic_delta block
+            and a.get("source") != "NAIC LATF"
         ][:8]
         if not top:
             continue
@@ -503,10 +430,7 @@ def summarize_with_groq(category_buckets, market_snapshot):
                 + (f"\n  {snippet}" if snippet else "")
             )
 
-    news_context = (
-        "\n".join(context_lines) if context_lines
-        else "No significant developments today."
-    )
+    news_context = "\n".join(context_lines) if context_lines else "No significant developments today."
 
     prompt = f"""
 You are writing a daily intelligence briefing for life and annuity actuaries.
@@ -521,7 +445,6 @@ RULES:
 - Filter out P&C, health, auto insurance, sports, consumer personal finance,
   and international news not relevant to US life/annuity markets.
 - Only include developments from the ARTICLES and NAIC LATF sections below.
-  Do not add information from your training data.
 
 MARKET DATA:
 {market_narrative}
@@ -533,53 +456,37 @@ ARTICLES:
 {news_context}
 
 Write sections using **Section Name** as the header.
-
 **Market Pulse**
 2-3 sentences on today's rate and spread levels. State the numbers plainly.
-
 **Valuation & Reserving**
 VM-20, VM-22, PBR, asset adequacy, LDTI, actuarial guidelines.
 Include any new NAIC LATF documents from the section above.
-
 **Regulatory Developments**
 NAIC, LATF, state departments, IRS/DOL.
-
 **Accounting & LDTI**
 ASC 944, FASB, LDTI implementation.
-
 **Mortality & Experience Studies**
 SOA/AAA research, mortality, experience studies, GLP-1 implications.
-
 **Reinsurance Market**
 Transactions, Bermuda, M&A involving reinsurers or life carriers.
-
 **Capital & Risk**
 RBC, rating agency actions on life/annuity carriers.
-
 **Annuity Market**
 FIA, RILA, MYGA sales data, product news, hedging developments.
-
 **Life Product Developments**
 IUL, term, whole life pricing, filings, AG 49.
-
 **Investments & ALM**
 Private credit, structured assets, insurer investment and ALM news.
-
 **Industry Trends**
 AI in insurance, PE consolidation, distribution shifts, longevity trends.
-
 **Carrier Intelligence**
 Named carrier news only. One sentence per carrier. Omit carriers with no news.
-
 **SOA / AAA Research**
 New publications and research releases.
-
 **Consulting & Research**
 Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 """
-
     try:
-        resp = config.groq_client if hasattr(config, "groq_client") else None
         resp = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.3-70b-versatile",
