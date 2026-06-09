@@ -1,5 +1,7 @@
 import re
 import json
+import time
+import random
 import requests
 import xml.etree.ElementTree as ET
 import html as html_lib
@@ -263,18 +265,60 @@ def fetch_direct_rss(url, source_name):
         return []
 
 
-def fetch_google_news(query):
+# Google News RSS blocks generic user-agents with 429/403 when hammered
+# in rapid succession from CI IPs. We rotate agents and add a small
+# random delay between requests to stay under the rate limit.
+_GNEWS_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
+]
+
+
+def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
     url = (
         "https://news.google.com/rss/search?"
         f"q={quote_plus(query)}&hl=en-US&gl=US&ceid=US:en"
     )
-    try:
-        resp = SESSION.get(url, timeout=15)
-        resp.raise_for_status()
-        return parse_rss_feed(resp.content, "Google News")
-    except Exception as e:
-        print(f"    Google News error [{query[:50]}]: {e}")
-        return []
+    headers = {
+        "User-Agent":      random.choice(_GNEWS_AGENTS),
+        "Accept":          "application/rss+xml, application/xml, text/xml, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection":      "keep-alive",
+        "Cache-Control":   "no-cache",
+    }
+
+    for attempt in range(retries + 1):
+        try:
+            # Small random delay: spreads 38 queries over ~20s, avoids burst
+            time.sleep(random.uniform(0.3, 0.9))
+            resp = SESSION.get(url, headers=headers, timeout=20)
+
+            # 429 — back off and retry with a different agent
+            if resp.status_code == 429:
+                wait = 5 * (attempt + 1)
+                print(f"    Google News 429 [{query[:40]}] — waiting {wait}s")
+                time.sleep(wait)
+                headers["User-Agent"] = random.choice(_GNEWS_AGENTS)
+                continue
+
+            resp.raise_for_status()
+            results = parse_rss_feed(resp.content, "Google News")
+
+            # Empty feed from a valid response usually means the query
+            # returned no results in the date window — not a dead source
+            return results
+
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(3 * (attempt + 1))
+            else:
+                print(f"    Google News error [{query[:50]}]: {e}")
+
+    return []
 
 
 LIFE_KEYWORDS = [
@@ -660,29 +704,44 @@ New publications and research releases.
 Reports from Milliman, Oliver Wyman, Deloitte, EY, PwC, KPMG, WTW.
 """
 
-    try:
-        resp = requests.post(
-            GEMINI_ENDPOINT,
-            params={"key": config.GEMINI_API_KEY},
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature":     0.1,
-                    "maxOutputTokens": 4096,
+    # Retry with exponential backoff — handles free-tier 429s
+    max_attempts = 4
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.post(
+                GEMINI_ENDPOINT,
+                params={"key": config.GEMINI_API_KEY},
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature":     0.1,
+                        "maxOutputTokens": 4096,
+                    },
                 },
-            },
-            timeout=60,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return (
-            data["candidates"][0]["content"]["parts"][0]["text"]
-        )
-    except Exception as e:
-        print(f"    Gemini error: {e}")
-        # Graceful fallback — build a minimal plain-text briefing
-        return _fallback_briefing(market_narrative, naic_delta)
+                timeout=60,
+            )
+
+            if resp.status_code == 429:
+                wait = 15 * (2 ** attempt)   # 15s, 30s, 60s, 120s
+                print(f"    Gemini 429 — waiting {wait}s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(wait)
+                continue
+
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                wait = 10 * (attempt + 1)
+                print(f"    Gemini error (attempt {attempt+1}): {e} — retrying in {wait}s")
+                time.sleep(wait)
+            else:
+                print(f"    Gemini error (final attempt): {e}")
+                return _fallback_briefing(market_narrative, naic_delta)
+
+    return _fallback_briefing(market_narrative, naic_delta)
 
 
 def _fallback_briefing(market_narrative: str, naic_delta: str) -> str:
