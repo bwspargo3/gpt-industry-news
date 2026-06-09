@@ -36,41 +36,16 @@ BROWSER_HEADERS = {
 
 GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models"
-    "/gemini-2.0-flash:generateContent"
+    "/gemini-2.0-flash-lite:generateContent"
 )
 
 
 # ------------------------------------------------------------------
-# Cross-day seen-articles cache
-# Guarantees each article appears in the digest exactly once across
-# all runs, regardless of how many days it stays in DAYS_BACK window.
-# Uses the same JSON-on-disk pattern as the NAIC LATF cache.
+# 24-hour freshness filter
+# Only keeps articles published within the last 24 hours.
+# Simple, reliable, and matches how every professional newsletter works.
+# No cross-run cache needed — the article date is the single source of truth.
 # ------------------------------------------------------------------
-
-def _load_seen_cache() -> dict:
-    """Returns {article_key: first_seen_date_str}."""
-    try:
-        with open(config.SEEN_ARTICLES_CACHE_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_seen_cache(cache: dict) -> None:
-    try:
-        with open(config.SEEN_ARTICLES_CACHE_FILE, "w") as f:
-            json.dump(cache, f, indent=2)
-    except Exception as e:
-        print(f"    Seen-articles cache save error: {e}")
-
-
-def _prune_seen_cache(cache: dict) -> dict:
-    """Drop entries older than SEEN_ARTICLES_TTL_DAYS."""
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(days=config.SEEN_ARTICLES_TTL_DAYS)
-    ).strftime("%Y-%m-%d")
-    return {k: v for k, v in cache.items() if v >= cutoff}
-
 
 def _article_key(article: dict) -> str:
     title = (article.get("title") or "").lower()
@@ -78,31 +53,44 @@ def _article_key(article: dict) -> str:
     return re.sub(r"[^a-z0-9]", "", title + url)[:140]
 
 
-def filter_already_seen(articles: list[dict]) -> tuple[list[dict], int]:
+_DATE_FORMATS = [
+    "%b %d, %Y",   # Jun 09, 2026  — our standard output format
+    "%Y-%m-%d",    # 2026-06-09
+    "%B %d, %Y",   # June 09, 2026
+]
+
+
+def _parse_article_date(date_str: str):
+    """Returns a date object or None."""
+    if not date_str:
+        return None
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(date_str.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def filter_last_24h(articles: list[dict]) -> tuple[list[dict], int]:
     """
-    Removes articles already delivered in a previous run.
-    Returns (new_articles, suppressed_count).
-    Updates and persists the cache with today's new articles.
+    Keeps only articles whose date field is today or yesterday (UTC).
+    Articles with unparseable or missing dates are kept — can't determine age.
+    Returns (kept, dropped_count).
     """
-    cache   = _load_seen_cache()
-    cache   = _prune_seen_cache(cache)
-    today   = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    new     = []
-    skipped = 0
+    today     = datetime.now(timezone.utc).date()
+    yesterday = today - timedelta(days=1)
+    kept      = []
+    dropped   = 0
 
     for a in articles:
-        key = _article_key(a)
-        if not key:
-            new.append(a)
-            continue
-        if key in cache:
-            skipped += 1
+        pub = _parse_article_date(a.get("date") or "")
+        if pub is None or pub >= yesterday:
+            kept.append(a)
         else:
-            cache[key] = today
-            new.append(a)
+            dropped += 1
 
-    _save_seen_cache(cache)
-    return new, skipped
+    return kept, dropped
 
 
 # ------------------------------------------------------------------
