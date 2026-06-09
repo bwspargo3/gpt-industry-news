@@ -10,7 +10,9 @@ def env(name, default=None, required=False):
 # Environment
 # ------------------------------------------------------------------
 
-GROQ_API_KEY = env("GROQ_API_KEY", required=True)
+# Gemini replaces Groq for summarization.
+# Get a free key in ~2 minutes at https://aistudio.google.com/apikey
+GEMINI_API_KEY = env("GEMINI_API_KEY", required=True)
 
 NEWSAPI_KEY = (
     env("NEWSAPI_KEY")
@@ -35,6 +37,16 @@ MAX_ARTICLES_PER_QUERY   = 25
 MAX_ARTICLES_PER_SECTION = 20
 
 # ------------------------------------------------------------------
+# Cross-day deduplication cache
+# Stores seen article hashes for a rolling 30-day window so the same
+# article never appears in the digest twice across separate runs.
+# Cached in GitHub Actions exactly like the NAIC LATF cache.
+# ------------------------------------------------------------------
+
+SEEN_ARTICLES_CACHE_FILE = "seen_articles_cache.json"
+SEEN_ARTICLES_TTL_DAYS   = 30
+
+# ------------------------------------------------------------------
 # Noise filtering
 # ------------------------------------------------------------------
 
@@ -47,7 +59,7 @@ NOISE_PHRASES = [
     "crop insurance", "pet insurance", "travel insurance",
     "casualty treaty", "casualty actuarial society",
     "compounding pharmac", "kids' activities", "great place to work",
-    "zymo research", "real estate", "stream realty",
+    "zymo research", "stream realty",
     "venture funding", "recess expands", "stablecoin", "crypto etf",
     "uzbekistan", "lie detector", "medicaid mandates",
     "south koreans' annual", "poland aims", "nami statement",
@@ -55,11 +67,19 @@ NOISE_PHRASES = [
     "wetlands", "pesticide", "food safety", "aviation", "railroad",
     "coast guard", "nuclear", "veterans", "tribal",
     "forestry", "mining", "osha", "occupational safety",
-    "privacy act of 1974", "system of records", "postal service", 
+    "privacy act of 1974", "system of records", "postal service",
     "highway contract route", "when i was sold", "white coat investor",
     "personal finance blog", "crore", "rs 2,000", "rs 5,000", "lakh",
     "agriculture platform senior", "commercial underwriter",
     "workplace well-being", "cyber crime", "cyber problem",
+]
+
+# Whitelist overrides: if any of these phrases appear in the article,
+# the noise filter will NOT drop it even if a noise phrase also matches.
+# Protects legitimate ALM/investment articles that brush against noise terms.
+NOISE_WHITELIST = [
+    "private credit", "asset liability", "annuity portfolio",
+    "insurance holding", "life insurer", "reinsurance",
 ]
 
 SOURCE_MIN_SCORES = {
@@ -145,4 +165,43 @@ FUNCTION_TAGS = {
     "rila": ["PRICING", "ALM"], "myga": ["PRICING"],
     "iul": ["PRICING"], "indexed universal life": ["PRICING"],
     "pia": ["PRICING"], "personal income annuity": ["PRICING"],
+}
+
+# ------------------------------------------------------------------
+# Consulting opportunity signals
+# Articles matching these patterns get flagged in a dedicated
+# "Opportunity Signals" section — the core business-development layer.
+# ------------------------------------------------------------------
+
+CONSULTING_SIGNALS = {
+    "Reinsurance Transaction": [
+        "assumption reinsurance", "block transaction", "ceded block",
+        "coinsurance transaction", "funded reinsurance", "risk transfer",
+        "assumption transaction",
+    ],
+    "Reserve Strengthening": [
+        "reserve strengthening", "reserve increase", "restatement",
+        "material weakness", "unlocking", "assumption update",
+        "reserve review",
+    ],
+    "Regulatory Response Needed": [
+        "consent order", "market conduct examination", "regulatory action",
+        "corrective action", "cease and desist", "enforcement action",
+    ],
+    "New Product / Filing": [
+        "product launch", "new product", "product filing",
+        "filing approved", "rate filing", "form filing",
+    ],
+    "M&A Integration": [
+        "acquisition closed", "merger complete", "integration",
+        "post-acquisition", "combined company",
+    ],
+    "Actuarial Guideline Change": [
+        "actuarial guideline", "ag 49", "ag 43", "vm-20", "vm-22",
+        "pbr implementation", "principle based",
+    ],
+    "Rating Review": [
+        "rating review", "placed under review", "creditwatch",
+        "outlook negative", "downgrade", "upgrade",
+    ],
 }
