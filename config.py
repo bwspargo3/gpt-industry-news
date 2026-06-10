@@ -81,6 +81,12 @@ NOISE_PHRASES = [
     "coast guard", "nuclear", "veterans", "tribal",
     "forestry", "mining", "osha", "occupational safety",
 
+    # Low-quality / off-topic sources
+    "ritholtz.com", "mib:", "barry ritholtz", "bloomberg masters",
+    "yahoo entertainment", "stockstory", "seeking alpha",
+    "nba finals", "jalen brunson", "wembanyama", "knicks",
+    "sports & entertainment", "sports entertainment",
+
     # Junk / low-signal
     "compounding pharmac", "great place to work",
     "zymo research", "stream realty", "recess expands",
