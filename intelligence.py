@@ -233,12 +233,23 @@ def parse_rss_feed(content, source_name=""):
             date_str = dt.strftime("%b %d, %Y")
         except Exception:
             date_str = pub_date
+
+        # Google News RSS descriptions are just "Title - Source" in an <a> tag.
+        # Use the cleaner to strip that; fall back to empty rather than repeating title.
+        if source_name == "Google News":
+            snippet = _clean_gnews_description(desc)
+            # If snippet is blank or just repeats the title, leave it empty
+            if snippet.lower().strip() == title.lower().strip():
+                snippet = ""
+        else:
+            snippet = clean_snippet(desc)[:400]
+
         articles.append({
             "title":   title,
             "url":     link,
             "source":  source_name,
             "date":    date_str,
-            "snippet": clean_snippet(desc)[:400],
+            "snippet": snippet,
         })
     return articles
 
@@ -263,6 +274,25 @@ _GNEWS_AGENTS = [
     "(KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
 ]
+
+
+def _clean_gnews_description(raw: str) -> str:
+    """
+    Google News RSS description looks like:
+      <a href="...">Article title - Source Name</a>
+    Strip the HTML and remove the trailing source attribution
+    so the snippet contains only the article summary text.
+    If the description is just the title repeated, return empty
+    so the article card doesn't show a redundant snippet.
+    """
+    if not raw:
+        return ""
+    # Strip HTML tags
+    text = re.sub(r"<[^>]+>", " ", raw)
+    text = re.sub(r"\s+", " ", text).strip()
+    # Remove trailing " - Source Name" pattern (Google appends this)
+    text = re.sub(r"\s+-\s+[A-Z][^-]{2,50}$", "", text).strip()
+    return text[:400]
 
 
 def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
@@ -411,27 +441,39 @@ def deduplicate_articles(articles):
 # Noise filter — now with whitelist override
 # ------------------------------------------------------------------
 
-# Sources that publish heavily in P&C/international — require a life/annuity
-# keyword hit before passing an article through.
+# Sources that publish heavily in P&C/international.
+# Standard gate: requires any life/annuity keyword.
 LIFE_GATED_SOURCES = {
-    "Reinsurance News",
     "Insurance Journal",
     "Carrier Management",
     "ThinkAdvisor",
     "Pensions & Investments",
 }
 
+# Stricter gate for Reinsurance News: the word "reinsurance" alone is
+# not sufficient since they cover P&C brokers, specialty, and international
+# extensively. Require a *paired* life/annuity term.
+REINSURANCE_NEWS_KWS = [
+    "life insurance", "life insurer", "life reinsurer",
+    "annuity", "asset intensive", "asset-intensive",
+    "funded reinsurance", "block reinsurance", "block transaction",
+    "pension risk transfer", "longevity reinsurance",
+    "life retrocession", "life & annuity", "life and annuity",
+    "iul", "myga", "fia", "rila", "pbr", "vm-20", "vm-22", "ldti",
+    "mortality", "actuari",
+]
+
 def filter_noise(articles):
     filtered = []
     dropped  = 0
     life_kws = [
         "life insurance", "annuity", "actuari", "reserve", "valuation",
-        "reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
-        "mortality", "fia", "rila", "iul", "alm", "capital",
+        "life reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
+        "mortality", "fia", "rila", "iul", "alm",
         "hedging", "policyholder", "myga", "solvency",
-        "life insurer", "life reinsurance", "pia", "personal income annuity",
-        "asset intensive", "funded re", "block transaction",
-        "pension risk transfer", "prt", "longevity",
+        "life insurer", "pia", "personal income annuity",
+        "asset intensive", "asset-intensive", "funded re", "block transaction",
+        "pension risk transfer", "longevity",
     ]
 
     for a in articles:
@@ -450,7 +492,13 @@ def filter_noise(articles):
                 dropped += 1
                 continue
 
-        # Life-relevance gate for high-volume mixed sources
+        # Strict gate for Reinsurance News — must mention life/annuity explicitly
+        if a.get("source") == "Reinsurance News":
+            if not any(kw in text for kw in REINSURANCE_NEWS_KWS):
+                dropped += 1
+                continue
+
+        # Standard gate for other high-volume mixed sources
         if a.get("source") in LIFE_GATED_SOURCES:
             if not any(kw in text for kw in life_kws):
                 dropped += 1
