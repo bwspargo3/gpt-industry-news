@@ -278,20 +278,18 @@ _GNEWS_AGENTS = [
 
 def _clean_gnews_description(raw: str) -> str:
     """
-    Google News RSS description looks like:
-      <a href="...">Article title - Source Name</a>
-    Strip the HTML and remove the trailing source attribution
-    so the snippet contains only the article summary text.
-    If the description is just the title repeated, return empty
-    so the article card doesn't show a redundant snippet.
+    Google News RSS description is an HTML anchor containing:
+      "Article Title Source Name"  or  "Article Title - Source Name"
+    Strip HTML, remove the trailing source attribution (with or without dash),
+    and return empty string if the result is just the title repeated.
     """
     if not raw:
         return ""
-    # Strip HTML tags
     text = re.sub(r"<[^>]+>", " ", raw)
     text = re.sub(r"\s+", " ", text).strip()
-    # Remove trailing " - Source Name" pattern (Google appends this)
-    text = re.sub(r"\s+-\s+[A-Z][^-]{2,50}$", "", text).strip()
+    # Remove trailing source name — may appear with dash or just space-separated
+    # Pattern: optional " - " then 1-4 capitalized words at the end
+    text = re.sub(r"\s*-?\s+([A-Z][a-zA-Z&.]+\s*){1,4}$", "", text).strip()
     return text[:400]
 
 
@@ -311,8 +309,8 @@ def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
 
     for attempt in range(retries + 1):
         try:
-            # Small random delay: spreads 38 queries over ~20s, avoids burst
-            time.sleep(random.uniform(0.3, 0.9))
+            # Longer delay: CI runner IPs share rate limits — spread queries over ~2min
+            time.sleep(random.uniform(1.5, 3.0))
             resp = SESSION.get(url, headers=headers, timeout=20)
 
             # 429 — back off and retry with a different agent
