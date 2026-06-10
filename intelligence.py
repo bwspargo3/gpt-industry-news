@@ -411,6 +411,16 @@ def deduplicate_articles(articles):
 # Noise filter — now with whitelist override
 # ------------------------------------------------------------------
 
+# Sources that publish heavily in P&C/international — require a life/annuity
+# keyword hit before passing an article through.
+LIFE_GATED_SOURCES = {
+    "Reinsurance News",
+    "Insurance Journal",
+    "Carrier Management",
+    "ThinkAdvisor",
+    "Pensions & Investments",
+}
+
 def filter_noise(articles):
     filtered = []
     dropped  = 0
@@ -420,6 +430,8 @@ def filter_noise(articles):
         "mortality", "fia", "rila", "iul", "alm", "capital",
         "hedging", "policyholder", "myga", "solvency",
         "life insurer", "life reinsurance", "pia", "personal income annuity",
+        "asset intensive", "funded re", "block transaction",
+        "pension risk transfer", "prt", "longevity",
     ]
 
     for a in articles:
@@ -434,6 +446,12 @@ def filter_noise(articles):
 
         min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
         if min_hits > 0:
+            if not any(kw in text for kw in life_kws):
+                dropped += 1
+                continue
+
+        # Life-relevance gate for high-volume mixed sources
+        if a.get("source") in LIFE_GATED_SOURCES:
             if not any(kw in text for kw in life_kws):
                 dropped += 1
                 continue
