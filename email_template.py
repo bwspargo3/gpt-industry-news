@@ -586,7 +586,7 @@ def build_email_html(market_data, category_buckets, llm_summary,
           &nbsp;&bull;&nbsp; Google News
         </span><br>
         <span style="color:#CBD5E1;font-size:10px;">
-          Powered by Gemini 2.0 Flash &nbsp;&bull;&nbsp;
+          Powered by Gemini 2.5 Flash-Lite &nbsp;&bull;&nbsp;
           Opportunity signals generated automatically — verify before outreach
         </span>
       </td>
