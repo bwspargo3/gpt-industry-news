@@ -115,7 +115,38 @@ def fetch_tips_real_yield():
 # ------------------------------------------------------------------
 
 def fetch_sofr():
-    # Attempt 1: Treasury XML SOFR field
+    """
+    Fetch SOFR in reliability order:
+    1. FRED series SOFR  — same infrastructure as OAS, works reliably in CI
+    2. Treasury XML      — sometimes includes SOFR field
+    3. NY Fed HTML page  — scrape fallback
+    4. NY Fed CSV API    — frequently 503 in CI, last resort
+    """
+
+    # Attempt 1: FRED CSV — most reliable in CI (no auth, stable endpoint)
+    try:
+        resp = requests.get(
+            "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR",
+            timeout=10,
+            headers={"User-Agent": "ActuarialIntelligence/1.0"},
+        )
+        resp.raise_for_status()
+        lines = resp.text.strip().splitlines()
+        for row in reversed(lines[1:]):  # most recent first
+            parts = row.split(",")
+            if len(parts) < 2:
+                continue
+            val_str = parts[1].strip()
+            if val_str in (".", "", "NA"):
+                continue
+            val = float(val_str)
+            if 0.01 < val < 15:
+                print(f"    SOFR from FRED: {val}% ({parts[0].strip()})")
+                return {"value": val, "date": parts[0].strip()}
+    except Exception as e:
+        print(f"    SOFR FRED error: {e}")
+
+    # Attempt 2: Treasury XML SOFR field
     for yyyymm in _try_months():
         try:
             root   = _fetch_treasury_xml("daily_treasury_yield_curve", yyyymm)
@@ -128,7 +159,7 @@ def fetch_sofr():
         except Exception:
             pass
 
-    # Attempt 2: NY Fed rates HTML page — more stable than their CSV API
+    # Attempt 3: NY Fed HTML page
     try:
         resp = requests.get(
             "https://www.newyorkfed.org/markets/reference-rates/sofr",
@@ -136,7 +167,6 @@ def fetch_sofr():
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
-        # Rate appears as standalone decimal near "SOFR" label
         match = re.search(
             r"SOFR[^<]{0,400}?(\d{1,2}\.\d{2})",
             resp.text[:10000],
@@ -150,21 +180,19 @@ def fetch_sofr():
     except Exception as e:
         print(f"    SOFR HTML error: {e}")
 
-    # Attempt 3: NY Fed CSV (frequently 503 in CI environments)
+    # Attempt 4: NY Fed CSV API (frequently 503 in CI)
     try:
-        today  = datetime.utcnow()
-        start  = (today - timedelta(days=7)).strftime("%Y-%m-%d")
-        url    = (
+        today = datetime.utcnow()
+        start = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+        url   = (
             "https://markets.newyorkfed.org/read"
             f"?startDt={start}&eventCodes=SOFR"
             "&productCode=50&sort=postDt:-1&format=csv"
         )
-        resp   = requests.get(
-            url, timeout=10,
-            headers={"User-Agent": "ActuarialIntelligence/1.0"},
-        )
+        resp  = requests.get(url, timeout=10,
+                             headers={"User-Agent": "ActuarialIntelligence/1.0"})
         resp.raise_for_status()
-        lines  = resp.text.strip().splitlines()
+        lines = resp.text.strip().splitlines()
         for line in lines:
             parts = line.split(",")
             if len(parts) >= 2:
