@@ -16,7 +16,6 @@ TREASURY_NS = {
 
 
 def _fetch_treasury_xml(data_type, yyyymm):
-    """Generic Treasury.gov XML fetcher for any data type."""
     resp = requests.get(
         TREASURY_XML_URL,
         params={
@@ -31,13 +30,11 @@ def _fetch_treasury_xml(data_type, yyyymm):
 
 
 def _latest_entry(root):
-    """Returns the most recent Atom entry from a Treasury XML response."""
     entries = root.findall(".//{http://www.w3.org/2005/Atom}entry")
     return entries[-1] if entries else None
 
 
 def _try_months():
-    """Returns [current month YYYYMM, prior month YYYYMM]."""
     now = datetime.utcnow()
     return [
         now.strftime("%Y%m"),
@@ -92,17 +89,10 @@ def fetch_treasury_yields():
 
 
 # ------------------------------------------------------------------
-# TIPS real yields — used to calculate breakeven inflation
-# 10Y Breakeven = Nominal 10Y - TIPS Real 10Y
-# Both from Treasury.gov; same reliable source as nominal yields
+# TIPS real yields
 # ------------------------------------------------------------------
 
 def fetch_tips_real_yield():
-    """
-    Returns the 10Y TIPS real yield as a float, or None.
-    Source: Treasury.gov daily_treasury_real_yield_curve
-    Field: TC_10YEAR
-    """
     for yyyymm in _try_months():
         try:
             root   = _fetch_treasury_xml("daily_treasury_real_yield_curve", yyyymm)
@@ -118,15 +108,14 @@ def fetch_tips_real_yield():
 
 
 # ------------------------------------------------------------------
-# SOFR
+# SOFR — three attempts in reliability order
+# Attempt 1: Treasury XML (most reliable, same source as yields)
+# Attempt 2: NY Fed rates HTML page (more stable than their CSV API)
+# Attempt 3: NY Fed CSV (often 503 in CI — last resort)
 # ------------------------------------------------------------------
 
 def fetch_sofr():
-    """
-    Tries multiple sources for SOFR in order of reliability.
-    Returns {"value": float, "date": str} or None.
-    """
-    # Attempt 1: Treasury XML may include SOFR field
+    # Attempt 1: Treasury XML SOFR field
     for yyyymm in _try_months():
         try:
             root   = _fetch_treasury_xml("daily_treasury_yield_curve", yyyymm)
@@ -139,7 +128,29 @@ def fetch_sofr():
         except Exception:
             pass
 
-    # Attempt 2: NY Fed rates CSV download
+    # Attempt 2: NY Fed rates HTML page — more stable than their CSV API
+    try:
+        resp = requests.get(
+            "https://www.newyorkfed.org/markets/reference-rates/sofr",
+            timeout=15,
+            headers={"User-Agent": "ActuarialIntelligence/1.0"},
+        )
+        resp.raise_for_status()
+        # Rate appears as standalone decimal near "SOFR" label
+        match = re.search(
+            r"SOFR[^<]{0,400}?(\d{1,2}\.\d{2})",
+            resp.text[:10000],
+            re.DOTALL,
+        )
+        if match:
+            val = float(match.group(1))
+            if 0.01 < val < 15:
+                print(f"    SOFR from NY Fed HTML: {val}%")
+                return {"value": val, "date": "scraped"}
+    except Exception as e:
+        print(f"    SOFR HTML error: {e}")
+
+    # Attempt 3: NY Fed CSV (frequently 503 in CI environments)
     try:
         today  = datetime.utcnow()
         start  = (today - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -149,7 +160,7 @@ def fetch_sofr():
             "&productCode=50&sort=postDt:-1&format=csv"
         )
         resp   = requests.get(
-            url, timeout=15,
+            url, timeout=10,
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
@@ -158,37 +169,15 @@ def fetch_sofr():
             parts = line.split(",")
             if len(parts) >= 2:
                 try:
-                    return {
-                        "value": float(parts[-1].strip()),
-                        "date":  parts[0].strip(),
-                    }
+                    val = float(parts[-1].strip())
+                    if 0.01 < val < 15:
+                        return {"value": val, "date": parts[0].strip()}
                 except ValueError:
                     continue
     except Exception as e:
         print(f"    SOFR CSV error: {e}")
 
-    # Attempt 3: NY Fed rates page HTML
-    try:
-        resp = requests.get(
-            "https://www.newyorkfed.org/markets/reference-rates/sofr",
-            timeout=15,
-            headers={"User-Agent": "ActuarialIntelligence/1.0"},
-        )
-        resp.raise_for_status()
-        # Rate appears as a standalone decimal like "5.33" near "SOFR"
-        match = re.search(
-            r"SOFR[^<]{0,300}?(\d{1,2}\.\d{2})",
-            resp.text[:8000],
-            re.DOTALL,
-        )
-        if match:
-            val = float(match.group(1))
-            # Sanity check: SOFR is typically between 0.01 and 15
-            if 0.01 < val < 15:
-                return {"value": val, "date": "scraped"}
-    except Exception as e:
-        print(f"    SOFR page error: {e}")
-
+    print("    SOFR: all sources failed — showing N/A")
     return None
 
 
@@ -197,7 +186,6 @@ def fetch_sofr():
 # ------------------------------------------------------------------
 
 def fetch_vix():
-    """Fetch CBOE VIX via yfinance."""
     try:
         import yfinance as yf
         hist = yf.Ticker("^VIX").history(period="5d")
@@ -213,15 +201,10 @@ def fetch_vix():
 
 
 # ------------------------------------------------------------------
-# OAS spreads — try FRED with short timeout (fail fast)
+# OAS spreads via FRED
 # ------------------------------------------------------------------
 
 def fetch_oas_spreads():
-    """
-    Attempts to fetch IG and HY OAS from FRED.
-    Uses a short timeout to fail fast if FRED is blocking CI IPs.
-    Returns dict with IG_OAS and HY_OAS (or None for each).
-    """
     result = {"IG_OAS": None, "HY_OAS": None}
 
     for key, series_id in [("IG_OAS", "BAMLC0A0CM"), ("HY_OAS", "BAMLH0A0HYM2")]:
@@ -241,13 +224,13 @@ def fetch_oas_spreads():
                 if val in (".", "", "NA"):
                     continue
                 result[key] = {
-                    "value": round(float(val) * 100, 1),  # percent → bps
+                    "value": round(float(val) * 100, 1),
                     "date":  parts[0].strip(),
                     "unit":  "bps",
                 }
                 break
         except Exception:
-            pass  # Show N/A — better than wrong value or hanging
+            pass
 
     return result
 
@@ -269,8 +252,6 @@ def build_market_snapshot():
         if t2 and t10 else None
     )
 
-    # 10Y breakeven = nominal 10Y - TIPS real 10Y
-    # Both from Treasury.gov — same source, most accurate available
     tips_real = fetch_tips_real_yield()
     if t10 and tips_real is not None:
         breakeven = {
@@ -299,7 +280,7 @@ def build_market_snapshot():
 
 
 # ------------------------------------------------------------------
-# Formatting helpers (imported by email_template.py)
+# Formatting helpers
 # ------------------------------------------------------------------
 
 def safe_pct(item, decimals=2):
