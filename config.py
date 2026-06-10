@@ -41,37 +41,63 @@ MAX_ARTICLES_PER_SECTION = 20
 # ------------------------------------------------------------------
 
 NOISE_PHRASES = [
-    "police dog", "kyle busch", "pga tournament",
-    "offshore wind farm", "homeowners insurance", "flood insurance",
-    "auto insurance rate", "auto rates", "hurricane season",
-    "workers compensation", "workers' compensation", "workers' comp",
-    "property casualty", "commercial lines", "surety bond",
-    "crop insurance", "pet insurance", "travel insurance",
-    "casualty treaty", "casualty actuarial society",
-    "compounding pharmac", "kids' activities", "great place to work",
-    "zymo research", "stream realty",
-    "venture funding", "recess expands", "stablecoin", "crypto etf",
+    # Sports / entertainment
+    "police dog", "kyle busch", "pga tournament", "world cup",
+    "worker focus", "worker attendance", "sporting event",
+
+    # P&C / non-life lines
+    "homeowners insurance", "flood insurance", "auto insurance rate",
+    "auto rates", "hurricane season", "workers compensation",
+    "workers' compensation", "workers' comp", "property casualty",
+    "commercial lines", "surety bond", "crop insurance", "pet insurance",
+    "travel insurance", "casualty treaty", "casualty actuarial society",
+    "offshore wind farm", "parametric", "catastrophe bond",
+    "cat bond", "nat cat", "natural catastrophe",
+
+    # Automotive / safety
+    "seat belt", "highway safety", "vehicle recall", "commercial vehicle",
+    "pickup truck", "ford recall", "iihs", "nhtsa",
+
+    # Personnel appointments at non-life-actuarial firms
+    # (reinsurance brokers, P&C specialty, international ops)
+    "global markets, australia", "commercial claims",
+    "large personal property", "specialty reinsurance",
+    "corporate solutions france", "directeur général",
+    "demo day", "retail agent", "retail agents",
+
+    # Consumer / personal finance noise
+    "white coat investor", "personal finance blog",
+    "when i was sold", "kids' activities",
+
+    # International / irrelevant regulatory
     "uzbekistan", "lie detector", "medicaid mandates",
     "south koreans' annual", "poland aims", "nami statement",
+    "privacy act of 1974", "system of records", "postal service",
+    "highway contract route",
+
+    # Environmental / federal non-insurance
     "earthquake", "anadromous fish", "endangered species", "migratory bird",
     "wetlands", "pesticide", "food safety", "aviation", "railroad",
     "coast guard", "nuclear", "veterans", "tribal",
     "forestry", "mining", "osha", "occupational safety",
-    "privacy act of 1974", "system of records", "postal service",
-    "highway contract route", "when i was sold", "white coat investor",
-    "personal finance blog", "crore", "rs 2,000", "rs 5,000", "lakh",
+
+    # Junk / low-signal
+    "compounding pharmac", "great place to work",
+    "zymo research", "stream realty", "recess expands",
+    "stablecoin", "crypto etf", "venture funding",
+    "crore", "rs 2,000", "rs 5,000", "lakh",
     "agriculture platform senior", "commercial underwriter",
     "workplace well-being", "cyber crime", "cyber problem",
-    "seat belt", "highway safety", "vehicle recall", "commercial vehicle",
-    "pickup truck", "ford recall", "iihs", "nhtsa",
 ]
 
 # Whitelist overrides: if any of these phrases appear in the article,
 # the noise filter will NOT drop it even if a noise phrase also matches.
-# Protects legitimate ALM/investment articles that brush against noise terms.
+# Protects legitimate life/annuity articles that brush against noise terms.
 NOISE_WHITELIST = [
     "private credit", "asset liability", "annuity portfolio",
-    "insurance holding", "life insurer", "reinsurance",
+    "insurance holding", "life insurer", "life reinsurance",
+    "asset intensive", "funded reinsurance", "block reinsurance",
+    "vm-20", "vm-22", "pbr", "ldti", "rbc", "iul", "myga", "fia", "rila",
 ]
 
 SOURCE_MIN_SCORES = {
