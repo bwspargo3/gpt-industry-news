@@ -123,16 +123,16 @@ def fetch_sofr():
     4. NY Fed CSV API    — frequently 503 in CI, last resort
     """
 
-    # Attempt 1: FRED CSV — most reliable in CI (no auth, stable endpoint)
+    # Attempt 1a: FRED CSV — longer timeout for CI runner latency
     try:
         resp = requests.get(
             "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR",
-            timeout=10,
+            timeout=25,
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
         lines = resp.text.strip().splitlines()
-        for row in reversed(lines[1:]):  # most recent first
+        for row in reversed(lines[1:]):
             parts = row.split(",")
             if len(parts) < 2:
                 continue
@@ -141,10 +141,32 @@ def fetch_sofr():
                 continue
             val = float(val_str)
             if 0.01 < val < 15:
-                print(f"    SOFR from FRED: {val}% ({parts[0].strip()})")
+                print(f"    SOFR from FRED CSV: {val}% ({parts[0].strip()})")
                 return {"value": val, "date": parts[0].strip()}
     except Exception as e:
-        print(f"    SOFR FRED error: {e}")
+        print(f"    SOFR FRED CSV error: {e}")
+
+    # Attempt 1b: FRED JSON API — different endpoint, may not be throttled same way
+    try:
+        resp = requests.get(
+            "https://api.stlouisfed.org/fred/series/observations"
+            "?series_id=SOFR&sort_order=desc&limit=5&file_type=json"
+            "&api_key=14fb06d3c547e9b9b4be31773f38b05e",
+            timeout=25,
+            headers={"User-Agent": "ActuarialIntelligence/1.0"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        for obs in data.get("observations", []):
+            val_str = obs.get("value", ".")
+            if val_str in (".", "", "NA"):
+                continue
+            val = float(val_str)
+            if 0.01 < val < 15:
+                print(f"    SOFR from FRED JSON: {val}% ({obs.get('date','')})")
+                return {"value": val, "date": obs.get("date", "")}
+    except Exception as e:
+        print(f"    SOFR FRED JSON error: {e}")
 
     # Attempt 2: Treasury XML SOFR field
     for yyyymm in _try_months():
