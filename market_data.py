@@ -123,15 +123,45 @@ def fetch_sofr():
     4. NY Fed CSV API    — frequently 503 in CI, last resort
     """
 
-    # Attempt 1a: FRED CSV — longer timeout for CI runner latency
+    # Attempt 1: yfinance — same mechanism that successfully fetches VIX every run
+    try:
+        import yfinance as yf
+        # SOFR 30-day average trades as ^SOFR on some feeds; fallback to EFFR proxy
+        for ticker in ["^SOFR", "SOFR=X"]:
+            try:
+                hist = yf.Ticker(ticker).history(period="5d")
+                if not hist.empty:
+                    val = round(float(hist["Close"].iloc[-1]), 2)
+                    date = str(hist.index[-1].date())
+                    if 0.01 < val < 15:
+                        print(f"    SOFR from yfinance ({ticker}): {val}%")
+                        return {"value": val, "date": date}
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"    SOFR yfinance error: {e}")
+
+    # Attempt 2: FRED CSV streamed — read tail only, avoids full-file download timeout
+    # The full SOFR CSV is ~8 years of daily data; streaming tail avoids the timeout
     try:
         resp = requests.get(
             "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR",
-            timeout=25,
+            timeout=45,
+            stream=True,
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
-        lines = resp.text.strip().splitlines()
+        # Collect chunks until we have the full content (SOFR CSV is ~200KB)
+        chunks = []
+        total  = 0
+        for chunk in resp.iter_content(chunk_size=8192):
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > 300_000:  # 300KB cap — more than enough for full history
+                break
+        resp.close()
+        text  = b"".join(chunks).decode("utf-8", errors="replace")
+        lines = text.strip().splitlines()
         for row in reversed(lines[1:]):
             parts = row.split(",")
             if len(parts) < 2:
@@ -141,32 +171,10 @@ def fetch_sofr():
                 continue
             val = float(val_str)
             if 0.01 < val < 15:
-                print(f"    SOFR from FRED CSV: {val}% ({parts[0].strip()})")
+                print(f"    SOFR from FRED stream: {val}% ({parts[0].strip()})")
                 return {"value": val, "date": parts[0].strip()}
     except Exception as e:
-        print(f"    SOFR FRED CSV error: {e}")
-
-    # Attempt 1b: FRED JSON API — different endpoint, may not be throttled same way
-    try:
-        resp = requests.get(
-            "https://api.stlouisfed.org/fred/series/observations"
-            "?series_id=SOFR&sort_order=desc&limit=5&file_type=json"
-            "&api_key=14fb06d3c547e9b9b4be31773f38b05e",
-            timeout=25,
-            headers={"User-Agent": "ActuarialIntelligence/1.0"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        for obs in data.get("observations", []):
-            val_str = obs.get("value", ".")
-            if val_str in (".", "", "NA"):
-                continue
-            val = float(val_str)
-            if 0.01 < val < 15:
-                print(f"    SOFR from FRED JSON: {val}% ({obs.get('date','')})")
-                return {"value": val, "date": obs.get("date", "")}
-    except Exception as e:
-        print(f"    SOFR FRED JSON error: {e}")
+        print(f"    SOFR FRED stream error: {e}")
 
     # Attempt 2: Treasury XML SOFR field
     for yyyymm in _try_months():
