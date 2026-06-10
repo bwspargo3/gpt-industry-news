@@ -31,10 +31,10 @@ TO_EMAIL   = env("RECIPIENT_EMAIL", GMAIL_USER)
 # Collection settings
 # ------------------------------------------------------------------
 
-DAYS_BACK                = 5
+DAYS_BACK                = 7    # Collect 7 days; 24h display filter handles freshness
 MAX_ARTICLES             = 500
-MAX_ARTICLES_PER_QUERY   = 25
-MAX_ARTICLES_PER_SECTION = 20
+MAX_ARTICLES_PER_QUERY   = 30
+MAX_ARTICLES_PER_SECTION = 25
 
 # ------------------------------------------------------------------
 # Noise filtering
