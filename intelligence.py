@@ -240,8 +240,10 @@ def parse_rss_feed(content, source_name=""):
         # Google News RSS descriptions are just "Title - Source" in an <a> tag.
         # Use the cleaner to strip that; fall back to empty rather than repeating title.
         if source_name == "Google News":
+            # Strip trailing " - Source Name" from titles
+            # e.g. "Pacific Life Re inks deal - Reinsurance News" -> "Pacific Life Re inks deal"
+            title = re.sub(r"\s+-\s+[A-Z][A-Za-z &.']+$", "", title).strip()
             snippet = _clean_gnews_description(desc)
-            # If snippet is blank or just repeats the title, leave it empty
             if snippet.lower().strip() == title.lower().strip():
                 snippet = ""
         else:
