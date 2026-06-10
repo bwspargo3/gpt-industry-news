@@ -62,6 +62,8 @@ NOISE_PHRASES = [
     "personal finance blog", "crore", "rs 2,000", "rs 5,000", "lakh",
     "agriculture platform senior", "commercial underwriter",
     "workplace well-being", "cyber crime", "cyber problem",
+    "seat belt", "highway safety", "vehicle recall", "commercial vehicle",
+    "pickup truck", "ford recall", "iihs", "nhtsa",
 ]
 
 # Whitelist overrides: if any of these phrases appear in the article,
