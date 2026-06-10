@@ -42,18 +42,12 @@ DIRECT_RSS_FEEDS = [
     ("Regulatory",           "Federal Register (Treasury)",
      "https://www.federalregister.gov/api/v1/articles.rss?agencies[]=department-of-the-treasury&topics[]=life-insurance"),
 
-    # ThinkAdvisor — 404, feed moved; replaced with BenefitsPro (same parent, ALM Media)
-    ("Annuity Market",       "BenefitsPro",              "https://www.benefitspro.com/feed/"),
-
-    # Insurance Journal — confirmed working in production
+    # Insurance Journal — P&C focused but covers major market moves
     ("Trade Press",          "Insurance Journal",        "https://www.insurancejournal.com/feed/"),
-
-    # Pensions & Investments — 404; replaced with correct URL
-    ("Investments & ALM",    "Pensions & Investments",   "https://www.pionline.com/rss/news.rss"),
-
-    # InvestmentNews — retirement/annuity distribution channel
-    ("Annuity Market",       "InvestmentNews",           "https://www.investmentnews.com/feed"),
 ]
+# Note: ThinkAdvisor, BenefitsPro, Pensions & Investments, InvestmentNews
+# RSS feeds all returning 404 as of June 2026. Removed to reduce dead-source noise.
+# Google News queries cover the same content via search.
 
 # ------------------------------------------------------------------
 # Google News RSS Queries — industry topics
