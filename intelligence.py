@@ -74,18 +74,21 @@ def _parse_article_date(date_str: str):
 
 def filter_last_24h(articles: list[dict]) -> tuple[list[dict], int]:
     """
-    Keeps only articles whose date field is today or yesterday (UTC).
-    Articles with unparseable or missing dates are kept — can't determine age.
+    Keeps articles from the last 48 hours (today + 2 prior days).
+    Using 48h rather than 24h because:
+    - The digest runs at noon CT; yesterday-afternoon articles are 18-30h old
+    - UTC date math can make same-day articles appear "yesterday"
+    - Articles with unparseable dates are always kept
     Returns (kept, dropped_count).
     """
-    today     = datetime.now(timezone.utc).date()
-    yesterday = today - timedelta(days=1)
-    kept      = []
-    dropped   = 0
+    today   = datetime.now(timezone.utc).date()
+    cutoff  = today - timedelta(days=2)
+    kept    = []
+    dropped = 0
 
     for a in articles:
         pub = _parse_article_date(a.get("date") or "")
-        if pub is None or pub >= yesterday:
+        if pub is None or pub >= cutoff:
             kept.append(a)
         else:
             dropped += 1
@@ -533,7 +536,20 @@ SOURCE_WEIGHTS = {
     "LIMRA Newsroom":                8,
     "Reinsurance News":              8,
     "Carrier Management":            6,
+    "Life Annuity Specialist":       8,
+    "Federal Register (IRS Life)":   7,
+    "Federal Register (Treasury)":   6,
 }
+
+# Carrier names that get a score boost when they appear in article text.
+# These are the carriers most relevant to consulting and market intelligence.
+HIGH_VALUE_CARRIERS = [
+    "athene", "global atlantic", "corebridge", "brighthouse",
+    "lincoln financial", "equitable", "jackson national",
+    "fortitude re", "resolution life", "pacific life re",
+    "f&g", "fidelity & guaranty", "american equity",
+    "talcott", "somerset re", "american national",
+]
 
 
 def _detect_consulting_signals(text: str) -> list[str]:
@@ -597,6 +613,10 @@ def score_and_tag(articles):
 
         if "OTHER" in tags and len(tags) > 1:
             tags.discard("OTHER")
+
+        # Boost score for articles mentioning high-value carriers
+        if any(c in text for c in HIGH_VALUE_CARRIERS):
+            score += 4
 
         # Detect and attach consulting opportunity signals
         signals = _detect_consulting_signals(text)
