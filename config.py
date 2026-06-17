@@ -94,6 +94,8 @@ NOISE_PHRASES = [
     "crore", "rs 2,000", "rs 5,000", "lakh",
     "agriculture platform senior", "commercial underwriter",
     "workplace well-being", "cyber crime", "cyber problem",
+    "suzlon", "wind player", "general services administration", "gsa", "gsar",
+    "fema", "hseep", "homeland security exercise", "after action report/improvement",
 ]
 
 # Whitelist overrides: if any of these phrases appear in the article,
@@ -133,6 +135,7 @@ EVENT_PATTERNS = {
     "REINSURANCE": [
         "reinsurance", "coinsurance", "funded reinsurance",
         "ceded", "assumption transaction", "block transaction", "risk transfer",
+        "asset-intensive", "funded reinsurance",
     ],
     "EARNINGS": [
         "quarterly results", "earnings", "financial results",
@@ -168,11 +171,12 @@ EVENT_PATTERNS = {
 
 EVENT_SCORES = {
     "REINSURANCE": 20, "CAPITAL": 18, "REGULATORY": 18, "RATINGS": 16,
-    "EARNINGS": 15, "MNA": 15, "PRODUCT": 12, "RESEARCH": 10, "COMMUNITY": -25,
+    "EARNINGS": 12, "MNA": 15, "PRODUCT": 12, "RESEARCH": 15, "COMMUNITY": -25,
 }
 
 FUNCTION_TAGS = {
     "vm-20": ["VALUATION"], "vm-22": ["VALUATION"],
+    "goes": ["VALUATION"], "generator of economic scenarios": ["VALUATION"],
     "reserve": ["VALUATION"], "valuation": ["VALUATION"],
     "pbr": ["VALUATION"], "principle based reserving": ["VALUATION"],
     "ldti": ["ACCOUNTING"], "asc 944": ["ACCOUNTING"],

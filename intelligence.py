@@ -451,6 +451,9 @@ LIFE_GATED_SOURCES = {
     "Carrier Management",
     "ThinkAdvisor",
     "Pensions & Investments",
+    "Federal Register (IRS Life)",
+    "Google News",
+    "NewsAPI",
 }
 
 # Stricter gate for Reinsurance News: the word "reinsurance" alone is
@@ -463,20 +466,22 @@ REINSURANCE_NEWS_KWS = [
     "pension risk transfer", "longevity reinsurance",
     "life retrocession", "life & annuity", "life and annuity",
     "iul", "myga", "fia", "rila", "pbr", "vm-20", "vm-22", "ldti",
-    "mortality", "actuari",
+    "mortality", "actuarial", "actuary", "actuaries",
 ]
 
 def filter_noise(articles):
     filtered = []
     dropped  = 0
     life_kws = [
-        "life insurance", "annuity", "actuari", "reserve", "valuation",
+        "life insurance", "annuity", "actuarial", "actuary", "actuaries",
+        "reserve", "valuation",
         "life reinsurance", "rbc", "ldti", "vm-20", "vm-22", "pbr",
         "mortality", "fia", "rila", "iul", "alm",
         "hedging", "policyholder", "myga", "solvency",
         "life insurer", "pia", "personal income annuity",
         "asset intensive", "asset-intensive", "funded re", "block transaction",
-        "pension risk transfer", "longevity",
+        "pension risk transfer", "longevity", "universal life", "pension",
+        "retirement", "insurance holding",
     ]
 
     for a in articles:
@@ -484,26 +489,27 @@ def filter_noise(articles):
         text = ((a.get("title") or "") + " " + a["snippet"]).lower()
 
         # Whitelist check: if any override phrase present, never drop
-        if not any(phrase in text for phrase in NOISE_WHITELIST):
-            if any(phrase in text for phrase in NOISE_PHRASES):
+        # Using word boundaries to avoid false positives
+        if not any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_WHITELIST):
+            if any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_PHRASES):
                 dropped += 1
                 continue
 
         min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
         if min_hits > 0:
-            if not any(kw in text for kw in life_kws):
+            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in life_kws):
                 dropped += 1
                 continue
 
         # Strict gate for Reinsurance News — must mention life/annuity explicitly
         if a.get("source") == "Reinsurance News":
-            if not any(kw in text for kw in REINSURANCE_NEWS_KWS):
+            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in REINSURANCE_NEWS_KWS):
                 dropped += 1
                 continue
 
         # Standard gate for other high-volume mixed sources
         if a.get("source") in LIFE_GATED_SOURCES:
-            if not any(kw in text for kw in life_kws):
+            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in life_kws):
                 dropped += 1
                 continue
 
@@ -541,6 +547,16 @@ SOURCE_WEIGHTS = {
     "Life Annuity Specialist":       8,
     "Federal Register (IRS Life)":   7,
     "Federal Register (Treasury)":   6,
+    "Moody's":                      10,
+    "Mayer Brown":                  10,
+    "PwC":                          10,
+    "Deloitte":                     10,
+    "EY":                           10,
+    "Skadden":                      10,
+    "Munich Re":                    10,
+    "SCOR":                         10,
+    "Wink":                         10,
+    "Conning":                      10,
 }
 
 # Carrier names that get a score boost when they appear in article text.
@@ -551,6 +567,13 @@ HIGH_VALUE_CARRIERS = [
     "fortitude re", "resolution life", "pacific life re",
     "f&g", "fidelity & guaranty", "american equity",
     "talcott", "somerset re", "american national",
+]
+
+# High-value consulting, law, and research firms.
+HIGH_VALUE_FIRMS = [
+    "moody's", "mayer brown", "pwc", "deloitte", "ey", "kpmg",
+    "skadden", "munich re", "scor", "wink", "conning",
+    "milliman", "oliver wyman", "willis towers watson", "wtw",
 ]
 
 
@@ -616,9 +639,12 @@ def score_and_tag(articles):
         if "OTHER" in tags and len(tags) > 1:
             tags.discard("OTHER")
 
-        # Boost score for articles mentioning high-value carriers
-        if any(c in text for c in HIGH_VALUE_CARRIERS):
+        # Boost score for articles mentioning high-value carriers or firms
+        # Using word boundaries to avoid false positives (e.g. "ey" in "they")
+        if any(re.search(rf"\b{re.escape(c)}\b", text) for c in HIGH_VALUE_CARRIERS):
             score += 4
+        if any(re.search(rf"\b{re.escape(f)}\b", text) for f in HIGH_VALUE_FIRMS):
+            score += 5
 
         # Detect and attach consulting opportunity signals
         signals = _detect_consulting_signals(text)

@@ -61,6 +61,10 @@ SEARCH_QUERIES = [
     ("Valuation & Reserving",     "principle based reserving life"),
     ("Valuation & Reserving",     "LDTI life insurance accounting"),
     ("Valuation & Reserving",     "life insurance actuarial reserve"),
+    ("Valuation & Reserving",     "Moody's AXIS NAIC GOES"),
+    ("Valuation & Reserving",     "VM-22 NAIC annuity reserving"),
+    ("Valuation & Reserving",     "PBR principle based reserving life"),
+    ("Accounting & LDTI",         "LDTI life insurance accounting PwC EY Deloitte"),
 
     # Regulatory
     ("Regulatory",                "NAIC Life Actuarial Task Force"),
@@ -75,6 +79,8 @@ SEARCH_QUERIES = [
     ("Mortality & Experience",    "GLP-1 ozempic life insurance"),
     ("Mortality & Experience",    "longevity annuity risk study"),
     ("Mortality & Experience",    "COVID excess mortality life insurance"),
+    ("Mortality & Experience",    "Munich Re life mortality trend"),
+    ("Mortality & Experience",    "SCOR life mortality experience"),
 
     # Reinsurance — life-specific
     ("Reinsurance",               "life reinsurance transaction Bermuda"),
@@ -82,6 +88,8 @@ SEARCH_QUERIES = [
     ("Reinsurance",               "funded reinsurance life annuity"),
     ("Reinsurance",               "pension risk transfer reinsurance"),
     ("Reinsurance",               "life block reinsurance assumption"),
+    ("Reinsurance",               "Mayer Brown life reinsurance"),
+    ("Reinsurance",               "Skadden life reinsurance"),
 
     # Capital & Risk
     ("Capital & Risk",            "life insurance RBC capital NAIC"),
@@ -98,6 +106,9 @@ SEARCH_QUERIES = [
     ("Annuity Market",            "personal income annuity PIA"),
     ("Annuity Market",            "annuity product launch"),
     ("Annuity Market",            "deferred income annuity sales"),
+    ("Annuity Market",            "LIMRA annuity sales"),
+    ("Annuity Market",            "Wink annuity sales"),
+    ("Annuity Market",            "Conning annuity industry"),
 
     # Life Products
     ("Life Product Developments", "indexed universal life IUL"),
