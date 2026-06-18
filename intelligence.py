@@ -6,6 +6,7 @@ import random
 import requests
 import xml.etree.ElementTree as ET
 import html as html_lib
+from concurrent.futures import ThreadPoolExecutor
 
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -391,33 +392,42 @@ def collect_news():
             a.setdefault("category", category)
             raw.append(a)
 
-    print("  NAIC LATF...")
+    print("  NAIC LATF & SEC...")
     add("Regulatory", fetch_naic_latf(days_back=config.DAYS_BACK), "NAIC LATF")
-
-    print("  SEC EDGAR...")
     add("SEC Filings", fetch_edgar_filings(), "SEC EDGAR")
 
-    print("  Direct RSS feeds...")
-    for category, source, url in DIRECT_RSS_FEEDS:
-        add(category, fetch_direct_rss(url, source), source)
+    print("  Parallel RSS & NewsAPI...")
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        rss_futures = {
+            executor.submit(fetch_direct_rss, url, src): (cat, src)
+            for cat, src, url in DIRECT_RSS_FEEDS
+        }
+        api_future = executor.submit(fetch_newsapi_bulk, NEWSAPI_QUERIES)
 
-    print("  NewsAPI (bulk)...")
-    newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
-    for a in newsapi_articles:
-        a.setdefault("category", "NewsAPI")
-        raw.append(a)
+        for future in rss_futures:
+            cat, src = rss_futures[future]
+            add(cat, future.result(), src)
 
-    print("  Google News (industry)...")
-    for category, query in SEARCH_QUERIES:
-        add(category, fetch_google_news(query), f"GNews:{query[:40]}")
+        for a in api_future.result():
+            a.setdefault("category", "NewsAPI")
+            raw.append(a)
 
-    print("  Google News (firms)...")
-    for category, query in FIRM_SEARCH_QUERIES:
-        add(category, fetch_google_news(query), f"Firm:{query[:40]}")
+    # Google News stays sequential but reduced count to avoid 429s
+    print("  Google News (Industry/Firms/Carriers)...")
+    all_queries = [
+        (cat, q, f"GNews:{q[:30]}") for cat, q in SEARCH_QUERIES
+    ] + [
+        (cat, q, f"Firm:{q[:30]}") for cat, q in FIRM_SEARCH_QUERIES
+    ] + [
+        (cat, q, f"Carrier:{q[:30]}") for cat, q in CARRIER_SEARCH_QUERIES
+    ]
 
-    print("  Google News (carriers)...")
-    for category, query in CARRIER_SEARCH_QUERIES:
-        add(category, fetch_google_news(query), f"Carrier:{query[:40]}")
+    # Process Google News queries with slightly longer delays to be safe
+    for cat, query, label in all_queries:
+        items = fetch_google_news(query)
+        add(cat, items, label)
+        if items:
+            time.sleep(random.uniform(1.0, 2.0))
 
     dead  = [s for s, n in source_health.items() if n == 0]
     total = sum(source_health.values())

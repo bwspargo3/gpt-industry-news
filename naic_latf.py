@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from concurrent.futures import ThreadPoolExecutor
 
 NAIC_CACHE_FILE   = "naic_latf_cache.json"
 SESSION = requests.Session()
@@ -275,6 +276,8 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
     distinguish when a document was published vs. first discovered.
     """
     old_state  = load_naic_cache()
+    tier_network_count = 0
+    TIER_NETWORK_CAP   = 15 # Cap HEAD/PDF requests per run to avoid timeouts
     new_state  = {}
     new_items  = []
     retrieved  = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
@@ -325,7 +328,8 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
             if doc_type == "other":
                 continue
 
-            published_date, date_source = resolve_published_date(text, url)
+            # Resolve published date (Tier 1 only in loop)
+            published_date, date_source = extract_date_from_title(text)
             display_date = published_date or retrieved
 
             record = {
@@ -364,6 +368,25 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
 
         merged = prune_state({**old_state, **new_state})
         save_naic_cache(merged)
+
+        # For any new items that still don't have a date, attempt Tier 2/3 in parallel
+        to_resolve = [
+            i for i in new_items
+            if i.get("published_date") is None
+        ][:TIER_NETWORK_CAP]
+
+        if to_resolve:
+            def resolve_item(item):
+                d, s = extract_date_from_http_headers(item["url"]), "http:last_modified"
+                if not d:
+                    d, s = extract_date_from_pdf_header(item["url"]), "pdf:metadata"
+                if d:
+                    item["published_date"] = d
+                    item["date_source"] = s
+                    item["date"] = d
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                executor.map(resolve_item, to_resolve)
 
         dated = sum(1 for i in new_items if i.get("published_date"))
         print(
