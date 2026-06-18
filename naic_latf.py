@@ -6,6 +6,13 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 NAIC_CACHE_FILE   = "naic_latf_cache.json"
+SESSION = requests.Session()
+SESSION.headers.update({
+    "User-Agent":      "ActuarialIntelligence/1.0",
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection":      "keep-alive",
+})
 BROWSER_HEADERS   = {
     "User-Agent":      "ActuarialIntelligence/1.0",
     "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -127,7 +134,7 @@ def extract_date_from_title(text: str) -> tuple[str | None, str]:
 def extract_date_from_http_headers(url: str) -> str | None:
     """Tier 2 — HEAD request only, no body downloaded."""
     try:
-        resp = requests.head(url, headers=BROWSER_HEADERS, timeout=8, allow_redirects=True)
+        resp = SESSION.head(url, timeout=5, allow_redirects=True)
         last_mod = resp.headers.get("Last-Modified", "")
         if last_mod:
             dt = parsedate_to_datetime(last_mod).replace(tzinfo=None)
@@ -145,7 +152,7 @@ def extract_date_from_pdf_header(url: str) -> str | None:
     if not url.lower().endswith(".pdf"):
         return None
     try:
-        resp = requests.get(url, headers=BROWSER_HEADERS, timeout=12, stream=True)
+        resp = SESSION.get(url, timeout=8, stream=True)
         resp.raise_for_status()
         chunk = b""
         for data in resp.iter_content(chunk_size=1024):
@@ -278,7 +285,7 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
     ).strftime("%Y-%m-%d")
 
     try:
-        resp = requests.get(INDEX_URL, headers=BROWSER_HEADERS, timeout=20)
+        resp = SESSION.get(INDEX_URL, timeout=20)
         resp.raise_for_status()
 
         soup      = BeautifulSoup(resp.text, "lxml")

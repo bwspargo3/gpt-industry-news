@@ -3,6 +3,8 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": "ActuarialIntelligence/1.0"})
 
 TREASURY_XML_URL = (
     "https://home.treasury.gov/resource-center/data-chart-center"
@@ -16,14 +18,13 @@ TREASURY_NS = {
 
 
 def _fetch_treasury_xml(data_type, yyyymm):
-    resp = requests.get(
+    resp = SESSION.get(
         TREASURY_XML_URL,
         params={
             "data":                       data_type,
             "field_tdr_date_value_month": yyyymm,
         },
-        timeout=25,
-        headers={"User-Agent": "ActuarialIntelligence/1.0"},
+        timeout=15,
     )
     resp.raise_for_status()
     return ET.fromstring(resp.content)
@@ -117,64 +118,40 @@ def fetch_tips_real_yield():
 def fetch_sofr():
     """
     Fetch SOFR in reliability order:
-    1. FRED series SOFR  — same infrastructure as OAS, works reliably in CI
+    1. FRED series SOFR  — most reliable source, same as OAS
     2. Treasury XML      — sometimes includes SOFR field
     3. NY Fed HTML page  — scrape fallback
     4. NY Fed CSV API    — frequently 503 in CI, last resort
     """
 
-    # Attempt 1: yfinance — same mechanism that successfully fetches VIX every run
+    # Attempt 1: FRED CSV streamed
     try:
-        import yfinance as yf
-        # SOFR 30-day average trades as ^SOFR on some feeds; fallback to EFFR proxy
-        for ticker in ["^SOFR", "SOFR=X"]:
-            try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if not hist.empty:
-                    val = round(float(hist["Close"].iloc[-1]), 2)
-                    date = str(hist.index[-1].date())
-                    if 0.01 < val < 15:
-                        print(f"    SOFR from yfinance ({ticker}): {val}%")
-                        return {"value": val, "date": date}
-            except Exception:
-                continue
-    except Exception as e:
-        print(f"    SOFR yfinance error: {e}")
-
-    # Attempt 2: FRED CSV streamed — read tail only, avoids full-file download timeout
-    # The full SOFR CSV is ~8 years of daily data; streaming tail avoids the timeout
-    try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR",
-            timeout=45,
+            timeout=15,
             stream=True,
-            headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
-        # Collect chunks until we have the full content (SOFR CSV is ~200KB)
+        # Collect chunks (SOFR CSV is small, ~200KB)
         chunks = []
-        total  = 0
-        for chunk in resp.iter_content(chunk_size=8192):
+        for chunk in resp.iter_content(chunk_size=16384):
             chunks.append(chunk)
-            total += len(chunk)
-            if total > 300_000:  # 300KB cap — more than enough for full history
+            if sum(len(c) for c in chunks) > 500_000:
                 break
         resp.close()
         text  = b"".join(chunks).decode("utf-8", errors="replace")
         lines = text.strip().splitlines()
         for row in reversed(lines[1:]):
             parts = row.split(",")
-            if len(parts) < 2:
-                continue
+            if len(parts) < 2: continue
             val_str = parts[1].strip()
-            if val_str in (".", "", "NA"):
-                continue
+            if val_str in (".", "", "NA"): continue
             val = float(val_str)
             if 0.01 < val < 15:
-                print(f"    SOFR from FRED stream: {val}% ({parts[0].strip()})")
+                print(f"    SOFR from FRED: {val}% ({parts[0].strip()})")
                 return {"value": val, "date": parts[0].strip()}
     except Exception as e:
-        print(f"    SOFR FRED stream error: {e}")
+        print(f"    SOFR FRED error: {e}")
 
     # Attempt 2: Treasury XML SOFR field
     for yyyymm in _try_months():
@@ -191,10 +168,9 @@ def fetch_sofr():
 
     # Attempt 3: NY Fed HTML page
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://www.newyorkfed.org/markets/reference-rates/sofr",
             timeout=15,
-            headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
         match = re.search(
@@ -219,8 +195,7 @@ def fetch_sofr():
             f"?startDt={start}&eventCodes=SOFR"
             "&productCode=50&sort=postDt:-1&format=csv"
         )
-        resp  = requests.get(url, timeout=10,
-                             headers={"User-Agent": "ActuarialIntelligence/1.0"})
+        resp  = SESSION.get(url, timeout=10)
         resp.raise_for_status()
         lines = resp.text.strip().splitlines()
         for line in lines:
@@ -267,10 +242,9 @@ def fetch_oas_spreads():
 
     for key, series_id in [("IG_OAS", "BAMLC0A0CM"), ("HY_OAS", "BAMLH0A0HYM2")]:
         try:
-            resp = requests.get(
+            resp = SESSION.get(
                 f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
                 timeout=8,
-                headers={"User-Agent": "ActuarialIntelligence/1.0"},
             )
             resp.raise_for_status()
             lines = resp.text.strip().splitlines()

@@ -1,6 +1,7 @@
 import re
 import json
 import time
+import functools
 import random
 import requests
 import xml.etree.ElementTree as ET
@@ -18,6 +19,7 @@ from config import NOISE_PHRASES, NOISE_WHITELIST, SOURCE_MIN_SCORES
 from data_sources import (
     SEARCH_QUERIES,
     CARRIER_SEARCH_QUERIES,
+    FIRM_SEARCH_QUERIES,
     DIRECT_RSS_FEEDS,
     NEWSAPI_QUERIES,
 )
@@ -314,9 +316,9 @@ def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
 
     for attempt in range(retries + 1):
         try:
-            # Longer delay: CI runner IPs share rate limits — spread queries over ~2min
-            time.sleep(random.uniform(1.5, 3.0))
-            resp = SESSION.get(url, headers=headers, timeout=20)
+            # Random delay: CI runner IPs share rate limits
+            time.sleep(random.uniform(0.5, 1.5))
+            resp = SESSION.get(url, headers=headers, timeout=15)
 
             # 429 — back off and retry with a different agent
             if resp.status_code == 429:
@@ -409,6 +411,10 @@ def collect_news():
     for category, query in SEARCH_QUERIES:
         add(category, fetch_google_news(query), f"GNews:{query[:40]}")
 
+    print("  Google News (firms)...")
+    for category, query in FIRM_SEARCH_QUERIES:
+        add(category, fetch_google_news(query), f"Firm:{query[:40]}")
+
     print("  Google News (carriers)...")
     for category, query in CARRIER_SEARCH_QUERIES:
         add(category, fetch_google_news(query), f"Carrier:{query[:40]}")
@@ -469,6 +475,10 @@ REINSURANCE_NEWS_KWS = [
     "mortality", "actuarial", "actuary", "actuaries",
 ]
 
+@functools.lru_cache(maxsize=512)
+def _compile_regex(phrase):
+    return re.compile(rf"\b{re.escape(phrase)}\b")
+
 def filter_noise(articles):
     filtered = []
     dropped  = 0
@@ -490,26 +500,26 @@ def filter_noise(articles):
 
         # Whitelist check: if any override phrase present, never drop
         # Using word boundaries to avoid false positives
-        if not any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_WHITELIST):
-            if any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_PHRASES):
+        if not any(_compile_regex(phrase).search(text) for phrase in NOISE_WHITELIST):
+            if any(_compile_regex(phrase).search(text) for phrase in NOISE_PHRASES):
                 dropped += 1
                 continue
 
         min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
         if min_hits > 0:
-            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in life_kws):
+            if not any(_compile_regex(kw).search(text) for kw in life_kws):
                 dropped += 1
                 continue
 
         # Strict gate for Reinsurance News — must mention life/annuity explicitly
         if a.get("source") == "Reinsurance News":
-            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in REINSURANCE_NEWS_KWS):
+            if not any(_compile_regex(kw).search(text) for kw in REINSURANCE_NEWS_KWS):
                 dropped += 1
                 continue
 
         # Standard gate for other high-volume mixed sources
         if a.get("source") in LIFE_GATED_SOURCES:
-            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in life_kws):
+            if not any(_compile_regex(kw).search(text) for kw in life_kws):
                 dropped += 1
                 continue
 
@@ -641,9 +651,9 @@ def score_and_tag(articles):
 
         # Boost score for articles mentioning high-value carriers or firms
         # Using word boundaries to avoid false positives (e.g. "ey" in "they")
-        if any(re.search(rf"\b{re.escape(c)}\b", text) for c in HIGH_VALUE_CARRIERS):
+        if any(_compile_regex(c).search(text) for c in HIGH_VALUE_CARRIERS):
             score += 4
-        if any(re.search(rf"\b{re.escape(f)}\b", text) for f in HIGH_VALUE_FIRMS):
+        if any(_compile_regex(f).search(text) for f in HIGH_VALUE_FIRMS):
             score += 5
 
         # Detect and attach consulting opportunity signals

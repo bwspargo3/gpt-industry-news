@@ -45,6 +45,23 @@ DIRECT_RSS_FEEDS = [
 ]
 
 # ------------------------------------------------------------------
+# High-Value Firm Search Queries
+# ------------------------------------------------------------------
+
+FIRM_SEARCH_QUERIES = [
+    ("Valuation & Reserving", "Moody's AXIS insurance"),
+    ("Valuation & Reserving", "Milliman life insurance report"),
+    ("Valuation & Reserving", "Oliver Wyman life insurance"),
+    ("Reinsurance",           "Mayer Brown life reinsurance"),
+    ("Reinsurance",           "Skadden life reinsurance"),
+    ("Accounting & LDTI",     "PwC LDTI insurance"),
+    ("Accounting & LDTI",     "EY LDTI insurance"),
+    ("Accounting & LDTI",     "Deloitte LDTI insurance"),
+    ("Mortality & Experience", "Munich Re mortality"),
+    ("Mortality & Experience", "SCOR life mortality"),
+]
+
+# ------------------------------------------------------------------
 # Google News RSS Queries — industry topics
 #
 # PRODUCTION LESSONS:
@@ -55,89 +72,49 @@ DIRECT_RSS_FEEDS = [
 # ------------------------------------------------------------------
 
 SEARCH_QUERIES = [
-    # Valuation & Reserving
-    ("Valuation & Reserving",     "VM-20 life insurance reserve"),
-    ("Valuation & Reserving",     "VM-22 annuity reserve NAIC"),
-    ("Valuation & Reserving",     "principle based reserving life"),
-    ("Valuation & Reserving",     "LDTI life insurance accounting"),
-    ("Valuation & Reserving",     "life insurance actuarial reserve"),
-    ("Valuation & Reserving",     "Moody's AXIS NAIC GOES"),
-    ("Valuation & Reserving",     "VM-22 NAIC annuity reserving"),
-    ("Valuation & Reserving",     "PBR principle based reserving life"),
-    ("Accounting & LDTI",         "LDTI life insurance accounting PwC EY Deloitte"),
+    # Valuation & Reserving / Accounting
+    ("Valuation & Reserving",     "VM-20 OR VM-22 OR PBR life insurance reserve"),
+    ("Valuation & Reserving",     "LDTI OR FASB life insurance accounting"),
+    ("Valuation & Reserving",     "NAIC GOES economic scenarios"),
 
     # Regulatory
-    ("Regulatory",                "NAIC Life Actuarial Task Force"),
-    ("Regulatory",                "NAIC annuity suitability regulation"),
-    ("Regulatory",                "DOL fiduciary rule annuity"),
-    ("Regulatory",                "life insurance state regulation"),
-    ("Regulatory",                "annuity best interest regulation"),
+    ("Regulatory",                "NAIC Life Actuarial Task Force OR LATF"),
+    ("Regulatory",                "DOL fiduciary rule OR annuity suitability"),
 
     # Mortality & Experience
-    ("Mortality & Experience",    "SOA mortality study life"),
-    ("Mortality & Experience",    "life insurance mortality improvement"),
-    ("Mortality & Experience",    "GLP-1 ozempic life insurance"),
-    ("Mortality & Experience",    "longevity annuity risk study"),
-    ("Mortality & Experience",    "COVID excess mortality life insurance"),
-    ("Mortality & Experience",    "Munich Re life mortality trend"),
-    ("Mortality & Experience",    "SCOR life mortality experience"),
+    ("Mortality & Experience",    "SOA mortality OR experience study"),
+    ("Mortality & Experience",    "GLP-1 OR longevity life insurance"),
+    ("Mortality & Experience",    "excess mortality life insurance"),
 
     # Reinsurance — life-specific
-    ("Reinsurance",               "life reinsurance transaction Bermuda"),
-    ("Reinsurance",               "asset intensive reinsurance deal"),
-    ("Reinsurance",               "funded reinsurance life annuity"),
-    ("Reinsurance",               "pension risk transfer reinsurance"),
-    ("Reinsurance",               "life block reinsurance assumption"),
-    ("Reinsurance",               "Mayer Brown life reinsurance"),
-    ("Reinsurance",               "Skadden life reinsurance"),
+    ("Reinsurance",               "asset intensive OR funded reinsurance"),
+    ("Reinsurance",               "life block reinsurance OR pension risk transfer"),
 
     # Capital & Risk
-    ("Capital & Risk",            "life insurance RBC capital NAIC"),
-    ("Capital & Risk",            "AM Best life insurer rating action"),
-    ("Capital & Risk",            "Moody's life insurance rating"),
-    ("Capital & Risk",            "Fitch life insurer outlook"),
+    ("Capital & Risk",            "life insurance RBC OR capital NAIC"),
+    ("Capital & Risk",            "AM Best OR Fitch OR Moody's life insurer"),
     ("Capital & Risk",            "life insurance solvency capital ratio"),
 
     # Annuity Market — high volume, core section
-    ("Annuity Market",            "fixed indexed annuity FIA sales"),
-    ("Annuity Market",            "RILA registered linked annuity"),
-    ("Annuity Market",            "MYGA multi-year guaranteed annuity rate"),
-    ("Annuity Market",            "LIMRA annuity sales record"),
-    ("Annuity Market",            "personal income annuity PIA"),
-    ("Annuity Market",            "annuity product launch"),
-    ("Annuity Market",            "deferred income annuity sales"),
-    ("Annuity Market",            "LIMRA annuity sales"),
-    ("Annuity Market",            "Wink annuity sales"),
-    ("Annuity Market",            "Conning annuity industry"),
+    ("Annuity Market",            "FIA OR RILA OR MYGA annuity sales"),
+    ("Annuity Market",            "LIMRA OR Wink OR Conning annuity"),
 
     # Life Products
-    ("Life Product Developments", "indexed universal life IUL"),
+    ("Life Product Developments", "indexed universal life OR IUL"),
     ("Life Product Developments", "IUL AG 49 actuarial guideline"),
-    ("Life Product Developments", "term life insurance rate filing"),
-    ("Life Product Developments", "whole life dividend interest rate"),
-    ("Life Product Developments", "life insurance product innovation"),
+    ("Life Product Developments", "term life OR whole life insurance"),
 
     # ALM & Investments
     ("Investments & ALM",         "private credit life insurer portfolio"),
-    ("Investments & ALM",         "life insurance investment strategy"),
-    ("Investments & ALM",         "insurer asset liability management"),
-    ("Investments & ALM",         "life insurer alternative assets"),
-    ("Investments & ALM",         "insurance company bond portfolio"),
+    ("Investments & ALM",         "insurer asset liability management ALM"),
 
     # Industry Trends
     ("Industry Trends",           "life insurance artificial intelligence AI"),
-    ("Industry Trends",           "private equity life insurance acquisition"),
+    ("Industry Trends",           "private equity OR PE life insurance"),
     ("Industry Trends",           "insurtech life annuity technology"),
-    ("Industry Trends",           "life insurance distribution channel"),
-    ("Industry Trends",           "PE backed life insurer Bermuda"),
 
     # Research
-    ("SOA / AAA Research",        "Society of Actuaries research report"),
-    ("SOA / AAA Research",        "American Academy of Actuaries life"),
-    ("SOA / AAA Research",        "actuarial research longevity mortality"),
-    ("Consulting & Research",     "Milliman life insurance actuarial"),
-    ("Consulting & Research",     "Oliver Wyman insurance report"),
-    ("Consulting & Research",     "Willis Towers Watson life insurance"),
+    ("SOA / AAA Research",        "Society of Actuaries OR AAA research"),
 ]
 
 # ------------------------------------------------------------------
@@ -149,57 +126,20 @@ SEARCH_QUERIES = [
 # ------------------------------------------------------------------
 
 CARRIER_SEARCH_QUERIES = [
-    # Mutuals & Giants — use name alone for broadest coverage
-    ("Carrier Intelligence", "New York Life insurance"),
-    ("Carrier Intelligence", "MassMutual life annuity"),
-    ("Carrier Intelligence", "Northwestern Mutual insurance"),
-    ("Carrier Intelligence", "Guardian Life insurance"),
-    ("Carrier Intelligence", "Penn Mutual life"),
-    ("Carrier Intelligence", "TIAA life annuity"),
-    ("Carrier Intelligence", "New York Life annuity"),
+    # Giants
+    ("Carrier Intelligence", "MetLife OR Prudential OR MassMutual"),
+    ("Carrier Intelligence", "New York Life OR Northwestern Mutual"),
 
-    # Large publics — earnings and strategic moves
-    ("Carrier Intelligence", "MetLife life insurance earnings"),
-    ("Carrier Intelligence", "MetLife annuity results"),
-    ("Carrier Intelligence", "Prudential Financial life insurance"),
-    ("Carrier Intelligence", "Prudential annuity earnings"),
-    ("Carrier Intelligence", "Lincoln Financial annuity"),
-    ("Carrier Intelligence", "Lincoln Financial Group earnings"),
-    ("Carrier Intelligence", "Corebridge Financial annuity"),
-    ("Carrier Intelligence", "Equitable Holdings annuity life"),
-    ("Carrier Intelligence", "Unum Group life insurance"),
-    ("Carrier Intelligence", "Principal Financial life annuity"),
-    ("Carrier Intelligence", "Brighthouse Financial annuity"),
-    ("Carrier Intelligence", "Nationwide life annuity"),
+    # Publics
+    ("Carrier Intelligence", "Lincoln Financial OR Corebridge OR Equitable"),
+    ("Carrier Intelligence", "Brighthouse OR Principal Financial OR AIG"),
 
-    # PE-backed annuity leaders — most active in reinsurance/M&A
-    ("Carrier Intelligence", "Athene annuity"),
-    ("Carrier Intelligence", "Athene reinsurance life"),
-    ("Carrier Intelligence", "Global Atlantic life annuity"),
-    ("Carrier Intelligence", "Global Atlantic reinsurance"),
-    ("Carrier Intelligence", "F&G annuity life"),
-    ("Carrier Intelligence", "Fidelity Guaranty Life annuity"),
-    ("Carrier Intelligence", "Jackson National annuity"),
-    ("Carrier Intelligence", "Allianz Life annuity"),
-    ("Carrier Intelligence", "Symetra life annuity"),
-    ("Carrier Intelligence", "Gainbridge annuity"),
-    ("Carrier Intelligence", "Fortitude Re life reinsurance"),
-    ("Carrier Intelligence", "Resolution Life reinsurance"),
-    ("Carrier Intelligence", "Somerset Re life reinsurance"),
-    ("Carrier Intelligence", "Talcott Resolution life"),
+    # PE / Annuity Specialists
+    ("Carrier Intelligence", "Athene OR Global Atlantic OR Jackson"),
+    ("Carrier Intelligence", "F&G OR Gainbridge OR Allianz Life"),
+    ("Carrier Intelligence", "Fortitude Re OR Resolution Life OR Somerset Re"),
 
-    # Regionals & Mid-size
-    ("Carrier Intelligence", "Ameritas life insurance"),
-    ("Carrier Intelligence", "Securian Financial life"),
-    ("Carrier Intelligence", "Mutual of Omaha life insurance"),
-    ("Carrier Intelligence", "Protective Life annuity"),
-    ("Carrier Intelligence", "Transamerica life annuity"),
-    ("Carrier Intelligence", "Pacific Life annuity"),
-    ("Carrier Intelligence", "Pacific Life Re reinsurance"),
-    ("Carrier Intelligence", "Sun Life US annuity"),
-    ("Carrier Intelligence", "Midland National annuity"),
-    ("Carrier Intelligence", "North American life annuity"),
-    ("Carrier Intelligence", "American Equity annuity"),
-    ("Carrier Intelligence", "AIG life insurance annuity"),
-    ("Carrier Intelligence", "Sammons Financial annuity"),
+    # Active Mid-size
+    ("Carrier Intelligence", "Pacific Life OR Transamerica OR Nationwide"),
+    ("Carrier Intelligence", "Ameritas OR Protective Life OR Sammons"),
 ]
