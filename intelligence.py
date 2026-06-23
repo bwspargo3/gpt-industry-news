@@ -315,7 +315,7 @@ def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
     for attempt in range(retries + 1):
         try:
             # Longer delay: CI runner IPs share rate limits — spread queries over ~2min
-            time.sleep(random.uniform(1.5, 3.0))
+            time.sleep(random.uniform(0.4, 0.8))
             resp = SESSION.get(url, headers=headers, timeout=20)
 
             # 429 — back off and retry with a different agent
@@ -416,7 +416,13 @@ def collect_news():
     dead  = [s for s, n in source_health.items() if n == 0]
     total = sum(source_health.values())
     if dead:
-        print(f"  ⚠ {len(dead)} dead sources")
+    print(f"  ⚠ {len(dead)} dead sources")
+
+    for src in dead[:20]:
+        print(f"      - {src}")
+
+    if len(dead) > 20:
+        print(f"      ... {len(dead)-20} more")
     print(f"  Total raw: {total} from {len(source_health)} sources")
     return raw
 
