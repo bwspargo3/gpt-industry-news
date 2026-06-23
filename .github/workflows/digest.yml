@@ -69,5 +69,4 @@ jobs:
             Workflow: ${{ github.workflow }}
             Run: ${{ github.run_number }}
       
-            Logs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
