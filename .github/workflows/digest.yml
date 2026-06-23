@@ -58,8 +58,16 @@ jobs:
         with:
           server_address: smtp.gmail.com
           server_port: 465
+          secure: true
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          from: ${{ secrets.GMAIL_USER }}
           to: ${{ secrets.GMAIL_USER }}
           subject: "⚠️ Actuarial Intelligence digest FAILED"
-          body: "The daily digest workflow failed. Check GitHub Actions logs."
+          body: |
+            Repository: ${{ github.repository }}
+            Workflow: ${{ github.workflow }}
+            Run: ${{ github.run_number }}
+      
+            Logs:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
