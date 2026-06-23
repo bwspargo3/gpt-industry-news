@@ -117,125 +117,122 @@ def fetch_tips_real_yield():
 def fetch_sofr():
     """
     Fetch SOFR in reliability order:
-    1. FRED series SOFR  — same infrastructure as OAS, works reliably in CI
-    2. Treasury XML      — sometimes includes SOFR field
-    3. NY Fed HTML page  — scrape fallback
-    4. NY Fed CSV API    — frequently 503 in CI, last resort
+
+    1. FRED CSV (primary)
+    2. Treasury XML SOFR field
+    3. NY Fed HTML page
+    4. NY Fed CSV API
+
+    Removed Yahoo Finance sources because ^SOFR and SOFR=X
+    consistently return 404/not-found responses.
     """
 
-    # Attempt 1: yfinance — same mechanism that successfully fetches VIX every run
-    try:
-        import yfinance as yf
-        # SOFR 30-day average trades as ^SOFR on some feeds; fallback to EFFR proxy
-        for ticker in ["^SOFR", "SOFR=X"]:
-            try:
-                hist = yf.Ticker(ticker).history(period="5d")
-                if not hist.empty:
-                    val = round(float(hist["Close"].iloc[-1]), 2)
-                    date = str(hist.index[-1].date())
-                    if 0.01 < val < 15:
-                        print(f"    SOFR from yfinance ({ticker}): {val}%")
-                        return {"value": val, "date": date}
-            except Exception:
-                continue
-    except Exception as e:
-        print(f"    SOFR yfinance error: {e}")
-
-    # Attempt 2: FRED CSV streamed — read tail only, avoids full-file download timeout
-    # The full SOFR CSV is ~8 years of daily data; streaming tail avoids the timeout
+    # ------------------------------------------------------------------
+    # Primary source: FRED
+    # ------------------------------------------------------------------
     try:
         resp = requests.get(
             "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR",
-            timeout=45,
-            stream=True,
+            timeout=12,
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
         resp.raise_for_status()
-        # Collect chunks until we have the full content (SOFR CSV is ~200KB)
-        chunks = []
-        total  = 0
-        for chunk in resp.iter_content(chunk_size=8192):
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > 300_000:  # 300KB cap — more than enough for full history
-                break
-        resp.close()
-        text  = b"".join(chunks).decode("utf-8", errors="replace")
-        lines = text.strip().splitlines()
+
+        lines = resp.text.strip().splitlines()
+
         for row in reversed(lines[1:]):
             parts = row.split(",")
+
             if len(parts) < 2:
                 continue
-            val_str = parts[1].strip()
-            if val_str in (".", "", "NA"):
-                continue
-            val = float(val_str)
-            if 0.01 < val < 15:
-                print(f"    SOFR from FRED stream: {val}% ({parts[0].strip()})")
-                return {"value": val, "date": parts[0].strip()}
-    except Exception as e:
-        print(f"    SOFR FRED stream error: {e}")
 
-    # Attempt 2: Treasury XML SOFR field
+            value = parts[1].strip()
+
+            if value in ("", ".", "NA"):
+                continue
+
+            val = float(value)
+
+            if 0.01 < val < 15:
+                print(f"    SOFR from FRED: {val}% ({parts[0]})")
+                return {
+                    "value": val,
+                    "date": parts[0],
+                }
+
+    except Exception as e:
+        print(f"    SOFR FRED error: {e}")
+
+    # ------------------------------------------------------------------
+    # Treasury XML fallback
+    # ------------------------------------------------------------------
     for yyyymm in _try_months():
         try:
-            root   = _fetch_treasury_xml("daily_treasury_yield_curve", yyyymm)
+            root = _fetch_treasury_xml(
+                "daily_treasury_yield_curve",
+                yyyymm,
+            )
+
             latest = _latest_entry(root)
+
             if not latest:
                 continue
+
             el = latest.find(".//d:SOFR", TREASURY_NS)
-            if el is not None and el.text and el.text.strip() not in ("", "null"):
-                return {"value": float(el.text.strip()), "date": yyyymm}
+
+            if (
+                el is not None
+                and el.text
+                and el.text.strip() not in ("", "null")
+            ):
+                val = float(el.text.strip())
+
+                print(f"    SOFR from Treasury XML: {val}%")
+
+                return {
+                    "value": val,
+                    "date": yyyymm,
+                }
+
         except Exception:
             pass
 
-    # Attempt 3: NY Fed HTML page
+    # ------------------------------------------------------------------
+    # NY Fed webpage fallback
+    # ------------------------------------------------------------------
     try:
         resp = requests.get(
             "https://www.newyorkfed.org/markets/reference-rates/sofr",
-            timeout=15,
+            timeout=10,
             headers={"User-Agent": "ActuarialIntelligence/1.0"},
         )
+
         resp.raise_for_status()
+
         match = re.search(
             r"SOFR[^<]{0,400}?(\d{1,2}\.\d{2})",
-            resp.text[:10000],
+            resp.text,
             re.DOTALL,
         )
+
         if match:
             val = float(match.group(1))
+
             if 0.01 < val < 15:
                 print(f"    SOFR from NY Fed HTML: {val}%")
-                return {"value": val, "date": "scraped"}
+
+                return {
+                    "value": val,
+                    "date": "scraped",
+                }
+
     except Exception as e:
         print(f"    SOFR HTML error: {e}")
 
-    # Attempt 4: NY Fed CSV API (frequently 503 in CI)
-    try:
-        today = datetime.utcnow()
-        start = (today - timedelta(days=7)).strftime("%Y-%m-%d")
-        url   = (
-            "https://markets.newyorkfed.org/read"
-            f"?startDt={start}&eventCodes=SOFR"
-            "&productCode=50&sort=postDt:-1&format=csv"
-        )
-        resp  = requests.get(url, timeout=10,
-                             headers={"User-Agent": "ActuarialIntelligence/1.0"})
-        resp.raise_for_status()
-        lines = resp.text.strip().splitlines()
-        for line in lines:
-            parts = line.split(",")
-            if len(parts) >= 2:
-                try:
-                    val = float(parts[-1].strip())
-                    if 0.01 < val < 15:
-                        return {"value": val, "date": parts[0].strip()}
-                except ValueError:
-                    continue
-    except Exception as e:
-        print(f"    SOFR CSV error: {e}")
-
-    print("    SOFR: all sources failed — showing N/A")
+    # ------------------------------------------------------------------
+    # Final fallback
+    # ------------------------------------------------------------------
+    print("    SOFR unavailable")
     return None
 
 
