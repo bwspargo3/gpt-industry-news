@@ -416,15 +416,15 @@ def collect_news():
     dead  = [s for s, n in source_health.items() if n == 0]
     total = sum(source_health.values())
     if dead:
-    print(f"  ⚠ {len(dead)} dead sources")
+        print(f"  ⚠ {len(dead)} dead sources")
 
-    for src in dead[:20]:
-        print(f"      - {src}")
+        for src in dead[:20]:
+            print(f"      - {src}")
 
-    if len(dead) > 20:
-        print(f"      ... {len(dead)-20} more")
-    print(f"  Total raw: {total} from {len(source_health)} sources")
-    return raw
+        if len(dead) > 20:
+            print(f"      ... {len(dead)-20} more")
+        print(f"  Total raw: {total} from {len(source_health)} sources")
+        return raw
 
 
 # ------------------------------------------------------------------
