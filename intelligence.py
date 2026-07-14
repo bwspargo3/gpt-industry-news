@@ -1,3 +1,4 @@
+
 import re
 import json
 import time
@@ -14,7 +15,7 @@ from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
 
 import config
-from config import NOISE_PHRASES, NOISE_WHITELIST, SOURCE_MIN_SCORES
+from config import NOISE_PHRASES, NOISE_WHITELIST
 from data_sources import (
     SEARCH_QUERIES,
     CARRIER_SEARCH_QUERIES,
@@ -111,11 +112,16 @@ def clean_snippet(text: str) -> str:
 
 # ------------------------------------------------------------------
 # Data collection
+#
+# Every fetch_* function used by collect_news() returns (items, errored)
+# so the pipeline can tell the difference between "this source is
+# genuinely broken" and "this specific query had nothing new today,"
+# which is expected and normal for ~100+ narrow, targeted queries.
 # ------------------------------------------------------------------
 
-def fetch_newsapi_bulk(queries):
+def fetch_newsapi_bulk(queries) -> tuple[list[dict], bool]:
     if not config.NEWSAPI_KEY:
-        return []
+        return [], True
 
     cutoff    = datetime.now(timezone.utc) - timedelta(days=config.DAYS_BACK)
     from_date = cutoff.strftime("%Y-%m-%d")
@@ -127,6 +133,8 @@ def fetch_newsapi_bulk(queries):
 
     all_articles = []
     seen         = set()
+    error_count  = 0
+    total_queries = len(query_map)
 
     for query, categories in query_map.items():
         params = {
@@ -176,8 +184,14 @@ def fetch_newsapi_bulk(queries):
 
         except Exception as e:
             print(f"    NewsAPI error [{query[:40]}]: {e}")
+            error_count += 1
 
-    return all_articles
+    # Only treat the whole source as "errored" if every single query
+    # failed — a handful of failed queries out of dozens isn't a dead
+    # source, it's noise. Zero articles with zero errors just means
+    # nothing new matched in the window.
+    errored = total_queries > 0 and error_count == total_queries
+    return all_articles, errored
 
 
 def parse_rss_feed(content, source_name=""):
@@ -259,14 +273,14 @@ def parse_rss_feed(content, source_name=""):
     return articles
 
 
-def fetch_direct_rss(url, source_name):
+def fetch_direct_rss(url, source_name) -> tuple[list[dict], bool]:
     try:
         resp = SESSION.get(url, headers=BROWSER_HEADERS, timeout=15)
         resp.raise_for_status()
-        return parse_rss_feed(resp.content, source_name)
+        return parse_rss_feed(resp.content, source_name), False
     except Exception as e:
         print(f"    RSS error [{source_name}]: {e}")
-        return []
+        return [], True
 
 
 # Google News RSS blocks generic user-agents with 429/403 when hammered
@@ -284,21 +298,30 @@ _GNEWS_AGENTS = [
 def _clean_gnews_description(raw: str) -> str:
     """
     Google News RSS description is an HTML anchor containing:
-      "Article Title Source Name"  or  "Article Title - Source Name"
-    Strip HTML, remove the trailing source attribution (with or without dash),
+      "Article Title - Source Name"
+    Strip HTML and remove the trailing " - Source Name" attribution,
     and return empty string if the result is just the title repeated.
+
+    IMPORTANT: the dash separator is required before stripping. An
+    earlier version made the dash optional, which meant any trailing
+    1-4 capitalized words got stripped even without one — including
+    genuine keywords like "Life Insurance" or "VM-20" when they
+    happened to land at the end of a headline. That silently fed
+    truncated text into the noise filter's keyword gate and caused
+    on-topic articles to be dropped as irrelevant. Requiring the dash
+    matches the actual Google News format and only strips real source
+    attributions.
     """
     if not raw:
         return ""
     text = re.sub(r"<[^>]+>", " ", raw)
     text = re.sub(r"\s+", " ", text).strip()
-    # Remove trailing source name — may appear with dash or just space-separated
-    # Pattern: optional " - " then 1-4 capitalized words at the end
-    text = re.sub(r"\s*-?\s+([A-Z][a-zA-Z&.]+\s*){1,4}$", "", text).strip()
+    # Remove trailing " - Source Name" — dash separator required
+    text = re.sub(r"\s+-\s+([A-Z][a-zA-Z&.]+\s*){1,4}$", "", text).strip()
     return text[:400]
 
 
-def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
+def fetch_google_news(query: str, retries: int = 2) -> tuple[list[dict], bool]:
     url = (
         "https://news.google.com/rss/search?"
         f"q={quote_plus(query)}&hl=en-US&gl=US&ceid=US:en"
@@ -330,8 +353,10 @@ def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
             results = parse_rss_feed(resp.content, "Google News")
 
             # Empty feed from a valid response usually means the query
-            # returned no results in the date window — not a dead source
-            return results
+            # returned no results in the date window — not a dead source.
+            # errored=False here is what tells collect_news() this is a
+            # legitimate zero, not a broken feed.
+            return results, False
 
         except Exception as e:
             if attempt < retries:
@@ -339,7 +364,7 @@ def fetch_google_news(query: str, retries: int = 2) -> list[dict]:
             else:
                 print(f"    Google News error [{query[:50]}]: {e}")
 
-    return []
+    return [], True
 
 
 LIFE_KEYWORDS = [
@@ -348,7 +373,7 @@ LIFE_KEYWORDS = [
 ]
 
 
-def fetch_edgar_filings():
+def fetch_edgar_filings() -> tuple[list[dict], bool]:
     articles = []
     try:
         resp = SESSION.get(
@@ -376,15 +401,20 @@ def fetch_edgar_filings():
             })
     except Exception as e:
         print(f"    EDGAR error: {e}")
-    return articles
+        return [], True
+    return articles, False
 
 
 def collect_news():
-    raw           = []
-    source_health = {}
+    raw            = []
+    source_health  = {}   # label -> item count this run
+    source_errored = set()  # labels where the fetch itself actually failed
 
-    def add(category, items, label):
+    def add(category, result, label):
+        items, errored = result
         source_health[label] = len(items)
+        if errored:
+            source_errored.add(label)
         for a in items:
             a.setdefault("category", category)
             raw.append(a)
@@ -400,10 +430,7 @@ def collect_news():
         add(category, fetch_direct_rss(url, source), source)
 
     print("  NewsAPI (bulk)...")
-    newsapi_articles = fetch_newsapi_bulk(NEWSAPI_QUERIES)
-    for a in newsapi_articles:
-        a.setdefault("category", "NewsAPI")
-        raw.append(a)
+    add("NewsAPI", fetch_newsapi_bulk(NEWSAPI_QUERIES), "NewsAPI (bulk)")
 
     print("  Google News (industry)...")
     for category, query in SEARCH_QUERIES:
@@ -413,18 +440,23 @@ def collect_news():
     for category, query in CARRIER_SEARCH_QUERIES:
         add(category, fetch_google_news(query), f"Carrier:{query[:40]}")
 
-    dead  = [s for s, n in source_health.items() if n == 0]
     total = sum(source_health.values())
-    if dead:
-        print(f"  ⚠ {len(dead)} dead sources")
+    empty = [s for s, n in source_health.items() if n == 0]
+    dead  = [s for s in empty if s in source_errored]   # real fetch failures
+    quiet = [s for s in empty if s not in source_errored]  # valid, just no hits today
 
+    if dead:
+        print(f"  ⚠ {len(dead)} dead sources (fetch errors — investigate these)")
         for src in dead[:20]:
             print(f"      - {src}")
-
         if len(dead) > 20:
-            print(f"      ... {len(dead)-20} more")
-        print(f"  Total raw: {total} from {len(source_health)} sources")
-        return raw
+            print(f"      ... {len(dead) - 20} more")
+
+    if quiet:
+        print(f"  ℹ {len(quiet)} queries returned no results today (normal, not an error)")
+
+    print(f"  Total raw: {total} from {len(source_health)} sources")
+    return raw
 
 
 # ------------------------------------------------------------------
@@ -498,12 +530,6 @@ def filter_noise(articles):
         # Using word boundaries to avoid false positives
         if not any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_WHITELIST):
             if any(re.search(rf"\b{re.escape(phrase)}\b", text) for phrase in NOISE_PHRASES):
-                dropped += 1
-                continue
-
-        min_hits = SOURCE_MIN_SCORES.get(a.get("source") or "", 0)
-        if min_hits > 0:
-            if not any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in life_kws):
                 dropped += 1
                 continue
 
