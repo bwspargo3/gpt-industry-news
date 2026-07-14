@@ -1,3 +1,4 @@
+
 import os
 
 def env(name, default=None, required=False):
@@ -108,11 +109,13 @@ NOISE_WHITELIST = [
     "vm-20", "vm-22", "pbr", "ldti", "rbc", "iul", "myga", "fia", "rila",
 ]
 
-SOURCE_MIN_SCORES = {
-    "NAIC LATF": 0,
-    "SEC EDGAR": 0,
-    "Google News": 0,
-}
+# NOTE: a SOURCE_MIN_SCORES dict used to live here. It was dead code —
+# every value in it was 0, so the `min_hits > 0` check that consumed it
+# in filter_noise() could never fire for any source. The real gating
+# logic is LIFE_GATED_SOURCES (in intelligence.py), which is what
+# actually filters Google News / NewsAPI / mixed-topic sources by
+# life-annuity keyword presence. Removed to avoid the two mechanisms
+# looking like they disagree with each other.
 
 # ------------------------------------------------------------------
 # Impact thresholds
