@@ -1,3 +1,4 @@
+
 import re
 import json
 import requests
@@ -51,7 +52,18 @@ def make_id(url: str) -> str:
 
 
 # ------------------------------------------------------------------
-# Date extraction — three-tier hierarchy
+# Date extraction — four-tier hierarchy
+#
+# IMPORTANT: the bare "year only" pattern (e.g. "2024 PBR Review Report")
+# is deliberately the LAST resort, not the first. A bare year in a title
+# is almost always the *subject matter* year (e.g. a report analyzing
+# 2024 experience), not the date the document was posted. Checking it
+# before the HTTP Last-Modified header caused freshly-posted documents
+# to be misdated to whatever year they discussed, which then made them
+# look "old" and drop out of the days_back window even though they had
+# just appeared on the page. HTTP/PDF metadata reflect the actual
+# publish/modification time and are far more trustworthy, so they now
+# run first whenever the title doesn't contain an explicit full date.
 # ------------------------------------------------------------------
 
 def _parse_slash_date(date_str: str) -> str | None:
@@ -74,15 +86,18 @@ def _parse_slash_date(date_str: str) -> str | None:
 
 def extract_date_from_title(text: str) -> tuple[str | None, str]:
     """
-    Tier 1 — no HTTP required.
+    Tier 1 — no HTTP required. Only explicit, unambiguous date patterns.
 
     Handles:
       "Materials (Updated 3/18/26)"          → 2026-03-18
       "Minutes (Updated 4/16)"               → 2026-04-16
-      "2024 PBR Review Report"               → 2024-01-01
-      "VM-22 Exposure Draft January 2026"    → 2026-01-01
       "March 18, 2026 Meeting Materials"     → 2026-03-18
+      "VM-22 Exposure Draft January 2026"    → 2026-01-01
       "Adopted Model Regulation August 2025" → 2025-08-01
+
+    Deliberately does NOT match a bare year alone (e.g. "2024 PBR Review
+    Report") — see module docstring above. That case is handled by
+    extract_year_only_fallback(), used only as a last resort.
     """
     t = text.strip()
 
@@ -116,11 +131,20 @@ def extract_date_from_title(text: str) -> tuple[str | None, str]:
         mm = MONTH_MAP.get(m.group(1).lower(), "01")
         return f"{m.group(2)}-{mm}-01", "title:month_year"
 
-    # Four-digit year alone  e.g. "2024 PBR Review Report"
-    m = re.search(r"\b(20\d{2})\b", t)
-    if m:
-        return f"{m.group(1)}-01-01", "title:year_only"
+    return None, "none"
 
+
+def extract_year_only_fallback(text: str) -> tuple[str | None, str]:
+    """
+    Tier 4 — last resort only. A bare four-digit year in a title (e.g.
+    "2024 PBR Review Report") is weak evidence of posting date since it
+    usually refers to the subject matter, not when the document was
+    published. Only used if title patterns, HTTP headers, and PDF
+    metadata all failed to produce a date.
+    """
+    m = re.search(r"\b(20\d{2})\b", text.strip())
+    if m:
+        return f"{m.group(1)}-01-01", "title:year_only_fallback"
     return None, "none"
 
 
@@ -171,10 +195,11 @@ def extract_date_from_pdf_header(url: str) -> str | None:
 
 def resolve_published_date(title: str, url: str) -> tuple[str | None, str]:
     """
-    Applies the three-tier date hierarchy:
-      1. Title pattern       (no HTTP)
+    Applies the four-tier date hierarchy, most reliable first:
+      1. Title pattern (explicit date only — no HTTP)
       2. HTTP Last-Modified  (HEAD only)
       3. PDF binary header   (first 4 KB)
+      4. Bare year in title  (weakest signal — last resort)
 
     Returns (date_str, source_label) or (None, "none").
     """
@@ -187,6 +212,9 @@ def resolve_published_date(title: str, url: str) -> tuple[str | None, str]:
     date = extract_date_from_pdf_header(url)
     if date:
         return date, "pdf:metadata"
+    date, source = extract_year_only_fallback(title)
+    if date:
+        return date, source
     return None, "none"
 
 
@@ -250,7 +278,7 @@ def prune_state(state: dict) -> dict:
 # Main fetcher
 # ------------------------------------------------------------------
 
-def fetch_naic_latf(days_back: int = 5) -> list[dict]:
+def fetch_naic_latf(days_back: int = 5) -> tuple[list[dict], bool]:
     """
     Scrapes the NAIC LATF index page for document file links.
 
@@ -266,6 +294,10 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
 
     Both published_date and retrieved_date are stored so the feed can
     distinguish when a document was published vs. first discovered.
+
+    Returns (items, errored). errored is True only when the page fetch
+    itself failed (network/HTTP error) — a page that fetched fine but
+    yielded zero new documents this run is NOT an error.
     """
     old_state  = load_naic_cache()
     new_state  = {}
@@ -351,7 +383,7 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
         new_items = [
             i for i in new_items
             if i.get("published_date") is None          # unknown age → keep
-            or i["published_date"] >= cutoff            # within window → keep
+            or i["published_date"] >= cutoff             # within window → keep
         ]
         excluded = before_filter - len(new_items)
 
@@ -365,11 +397,11 @@ def fetch_naic_latf(days_back: int = 5) -> list[dict]:
             f"{len(merged)} cached | "
             f"{dated}/{len(new_items)} with published dates"
         )
-        return new_items
+        return new_items, False
 
     except Exception as e:
         print(f"    NAIC LATF error: {e}")
-        return []
+        return [], True
 
 
 # ------------------------------------------------------------------
